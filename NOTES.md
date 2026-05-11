@@ -19,15 +19,25 @@ Risk Factors sections are notorious for year-over-year copy-paste with minor leg
 
 Risk Factors live at **Part II, Item 1A** in each 10-Q. Spike confirmed extraction returns ~298k chars for Q3 2024 and similar order of magnitude for Q2 2024.
 
-**Reading template — fill one row per noticed change. Aim for 15–30 rows total.**
+### Verdict — PLTR Q2-vs-Q3 2024 (2026-05-11)
 
-| # | Change (1-line summary) | Substantive? (y/n) | Class (new-risk / reword / moved / boilerplate) | Notes |
-|---|---|---|---|---|
-| 1 | _(example) Added language about export controls on AI/ML to government customers_ | y | new-risk | Captures real evolving exposure |
-| 2 | | | | |
-| 3 | | | | |
+Locked decision #3 (Risk Factors stickiness, `CLAUDE.md` §4.3) **fully confirmed**. The expanded Risk Factors body between consecutive PLTR 10-Qs is ~99% identical. The Risk Factor Summary bullets are byte-identical. The expanded body differs only in:
 
-**Calibration question to answer at the end:** of the rows marked substantive, what fraction would a sensible reader want to see surfaced on a dashboard? That fraction is roughly the materiality bar Stage 3 should target.
+- Date references rolled forward
+- Dollar amounts, percentages, and headcount updated inside otherwise identical sentences
+- One ~12-word parenthetical expansion in the AI-development risk (added "generative AI" and "operationalize" language)
+
+**No new risk categories. No removed risk categories. No materially rewritten paragraphs.**
+
+**Implication for Stage 1** (propagated into `ARCHITECTURE.md` §4): the rule filter must (a) raise the min-substantive-change threshold from the default 10 words to a candidate 22 (range 20–25), and (b) normalize dates, currency amounts, percentages, and integers to canonical tokens BEFORE computing the diff. Without normalization, Stage 1 would pass ~50 cosmetic changes per filing to Stage 2 and burn Haiku budget for nothing.
+
+**Caveat — this is the easy case.** 10-Q Item 1A is defined as a delta from the prior 10-K, so signal density between consecutive 10-Qs is low by construction. The real stress test is 10-K-vs-10-K. Sitting 2 of Phase 0.5 adds a 30-min PLTR FY22 vs FY23 spike (Step C) — substantive examples for the Stage 2 few-shot block must come from that pair, not this one.
+
+**Not a problem for the eval.** Of the 12 pre-registered events, the diff_analyzer-tagged ones (1, 3, 5, 7, 8, 9, 10, 11, 12) all involve periods where real business events occurred (banking stress, debt restructuring, AIP launch, regulatory approval, guidance cut, etc.). These should produce real substantive changes, distinguishable from the cosmetic noise documented here.
+
+### 10-K Risk Factors spike — PLTR FY22 vs FY23
+
+_Findings to be filled in by Step C of Phase 0.5 Sitting 2. Output script will write surviving chunks (post-normalization) to `spike/pltr_10k_riskdiff.md` for review._
 
 ## §2 — Form 4 / 10b5-1 quirks
 

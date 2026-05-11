@@ -102,12 +102,23 @@ The poller is the only writer of new `filings_seen` rows during live operation. 
 ### Three-stage filter
 
 **Stage 1 — Rule-based pre-filter (deterministic, no LLM).**
-- Ignore changes where only numbers differ (regex on surrounding ±10-token context, varying only digit/decimal/currency tokens)
-- Ignore changes shorter than N words (default 10, configurable as `diff_min_words`)
-- Ignore whitespace-only changes and citation reformatting ("Item 1A" vs "Item 1A.")
-- Output: list of `(section, old_chunk, new_chunk)` tuples that survived
 
-*Reason:* most diffs are noise. Stage 1 catches the obviously-noise category cheaply and deterministically before paying any LLM cost.
+Two-step:
+
+*Step 1a — Canonical-token normalization* (pre-diff). Replace volatile-but-cosmetic surface forms with stable canonical tokens BEFORE the diff is computed:
+- Dates (`September 30, 2024`, `2024-09-30`, `Q3 2024`, etc.) → `<DATE>`
+- Currency amounts (`$1.2 billion`, `$700,000`, `$.05`) → `<CURRENCY>`
+- Percentages (`12.3%`, `12.3 percent`) → `<PCT>`
+- Bare integers > 99 → `<INT>` (keeps small enumerators like "three" alone)
+
+*Step 1b — Diff + rule filtering.* Run a paragraph- or sentence-level diff over the normalized text. Then drop:
+- Whitespace-only changes and citation reformatting ("Item 1A" vs "Item 1A.")
+- Changes shorter than N words (default `diff_min_words = 22`, configurable)
+- Pure formatting deltas (HTML tag changes that survive parsing)
+
+Output: list of `(section, old_chunk, new_chunk)` tuples that survived, with the canonical-token-normalized forms tracked alongside the original text (Stage 2/3 see the original for context).
+
+*Reason:* most diffs are noise. The Q2-vs-Q3 manual diff (`NOTES.md` §1) showed that without normalization, ~50 cosmetic changes per filing would survive Stage 1 and burn Haiku budget at Stage 2 for nothing. Normalization first, threshold second.
 
 **Stage 2 — Haiku gate ("is this substantive?").**
 - Input: section name + old chunk + new chunk
@@ -128,9 +139,10 @@ The poller is the only writer of new `filings_seen` rows during live operation. 
 
 ### Config knobs (in `settings.toml`)
 
-- `diff_min_words` (default: 10)
-- `diff_number_only_skip` (default: true)
-- `diff_materiality_threshold` (default: 0.6 — `DiffSummary.materiality` is a 0–1 score)
+- `diff_normalize_tokens` (default: `true`) — switches Step 1a canonical-token normalization on
+- `diff_min_words` (default: `22` — candidate from Q2-vs-Q3 evidence in `NOTES.md` §1; final-lock 20 or 25 after the 10-K spike completes)
+- `diff_number_only_skip` (default: `true`) — redundant once `diff_normalize_tokens` is on, but kept as a belt-and-suspenders override
+- `diff_materiality_threshold` (default: `0.6` — `DiffSummary.materiality` is a 0–1 score)
 - `diff_comparison_strategy` (default: `most_recent_same_type`)
 
 ## §5 — Subsystem 4: Insider-trading correlator
