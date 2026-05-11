@@ -35,9 +35,29 @@ Locked decision #3 (Risk Factors stickiness, `CLAUDE.md` §4.3) **fully confirme
 
 **Not a problem for the eval.** Of the 12 pre-registered events, the diff_analyzer-tagged ones (1, 3, 5, 7, 8, 9, 10, 11, 12) all involve periods where real business events occurred (banking stress, debt restructuring, AIP launch, regulatory approval, guidance cut, etc.). These should produce real substantive changes, distinguishable from the cosmetic noise documented here.
 
-### 10-K Risk Factors spike — PLTR FY22 vs FY23
+### 10-K Risk Factors spike — PLTR FY22 vs FY23 (2026-05-11)
 
-_Findings to be filled in by Step C of Phase 0.5 Sitting 2. Output script will write surviving chunks (post-normalization) to `spike/pltr_10k_riskdiff.md` for review._
+Fetched and diffed by `spike/pltr_10k_riskdiff_spike.py`. 595 → 605 paragraphs. 117 raw paragraph-diff changes; 85 surviving after Stage 1 normalization + 22-word threshold. Gated by an exploratory Stage 2 simulation (OpenAI gpt-4o-mini via `spike/stage2_dryrun.py` — Phase 0.5 only; Phase 1 uses Anthropic Haiku per `ARCHITECTURE.md` §9). Gated output at `spike/pltr_10k_riskdiff_gated.md`.
+
+**Normalization-effectiveness finding (cross-reference to `ARCHITECTURE.md` §4):** canonical-token normalization eliminated only **3 of 117** changes in the 10-K-vs-10-K case, vs. the ~50 expected from the Q2-vs-Q3 finding. 10-K-vs-10-K is signal-dominated; 10-Q-vs-10-Q is noise-dominated. The normalization pre-step is still architecturally correct (catches real false positives at zero LLM cost), but its effectiveness varies sharply by filing-type pair. Worth keeping in mind for per-filing-type cost projections in Phase 1.
+
+**Over-flagging observation (Stage 2 prompt design implication):** the exploratory gpt-4o-mini gate flagged **48/85 (56%) as substantive**. Two probable causes: (a) the draft prompt's "substantive" bar is looser than production should be; (b) PLTR FY22→FY23 genuinely has unusually high signal density (AIP launch, AI-risk expansion, Share Repurchase Program, Israel/Hamas addition). Both are true. The Phase 1 Anthropic Haiku prompt must define "substantive" more precisely than this draft — the few-shot examples below anchor it.
+
+**Stage 2 few-shot examples — POSITIVES (substantive; should pass the gate):**
+
+1. **Chunk 10** (`replace`) — Risk Factors body adds explicit reference to *"Artificial Intelligence Platform (AIP)"* as a new product offering. Canonical "new product/platform" example. *This is the upstream story for eval event #6 (PLTR Karp insider sales around the AIP launch).*
+2. **Chunk 11** (`replace`) — new risk bullet: *"reluctance of customers to purchase products incorporating generative AI."* Canonical "new risk topic" example.
+3. **Chunk 14** (`insert`) — wholly new paragraph on hybrid / remote-workforce risk. Canonical "new explanatory paragraph" example.
+4. **Chunk 58** (`delete`) — risk category around NOLs and tax credits removed entirely. Canonical "risk REMOVED" example — the negative-space case the gate must handle.
+5. **Chunk 56** (`replace`) — new risk language around the Inflation Reduction Act and stock-buyback excise tax. Canonical "new regulatory exposure" example.
+
+**Stage 2 few-shot examples — NEGATIVES (cosmetic; should NOT pass even though they survive the 22-word threshold):**
+
+1. **Chunk 5** (`replace`) — top-3 customer concentration ratios update (17%/18%/5yrs → 18%/17%/8yrs). Pure number rolls inside otherwise identical sentences.
+2. **Chunk 12** (`replace`) — headcount 3,838 → 3,735. **Borderline:** the decline is mildly substantive economically, but Risk Factors stickiness convention says rolled numbers are not the disclosure event. Useful to anchor the gate at exactly this boundary.
+3. **Chunk 79** (`replace`) — date rolls + Founders' ages updated. Pure cosmetic.
+
+**Missing example type (harvest later):** "pure cosmetic that LOOKS substantive at first glance" — e.g., a counsel-reword preserving the same legal concept with fresh vocabulary. None of PLTR's 85 chunks hits that case cleanly; harvest from a different issuer (KEY FY22 or CVNA FY22 candidates) when designing the production prompt.
 
 ## §2 — Form 4 / 10b5-1 quirks
 
@@ -64,7 +84,32 @@ Form 144 ingestion (Phase 2, `ROADMAP.md`) would help — Form 144 is required f
 
 Why this matters: a CEO with 50 Form 4s per year (mostly F at vest dates) looks like a high-volume trader without filtering. The signal of interest is discretionary buying/selling — P and S only.
 
-Other codes (G gift, D return-to-issuer, etc.) are rare and currently ignored. Revisit if a meaningful eval miss is traced to one.
+Other codes (G gift, D return-to-issuer, etc.) are rare and currently ignored. Revisit if a meaningful eval miss is traced to one. (G observed once in the Phase 0.5 Form 4 distribution spike on PLTR — see §3.1.)
+
+## §3.1 — Form 4 distribution spike (Phase 0.5 Step D, 2026-05-11)
+
+3-month window (2026-02-11 → 2026-05-11) across two structurally different watchlist names. Run by `spike/form4_distribution.py`; raw output at `spike/form4_distribution.json`.
+
+| | PLTR | VRTX |
+|---|---|---|
+| Filings | 11 | 66 |
+| Unique insiders | 9 | 21 |
+| Code distribution | S=54, C=8, M=8, A=1, G=1 (no P) | S=57, F=42, A=30, D=4, M=4 |
+| 10b5-1 footnote hit-rate | 73% (8/11) | 48% (32/66) |
+| Plan-adoption-date regex extraction (given 10b5-1 hit) | 50% (4/8) | 0% (0/32) |
+| Insiders with ≥3 trades in window | 0/9 | 11/21 |
+
+**Findings that feed Phase 1 design:**
+
+1. **`volume_baseline_window` should default to 12 months, not 3.** PLTR-style names are sparse traders — zero insiders had ≥3 trades in 3 months. A trailing-12-month per-insider baseline with issuer-wide aggregate fallback (as `ARCHITECTURE.md` §5 already anticipated) is the right default. Final lock during Phase 1 correlator implementation; revisit if eval results suggest otherwise.
+
+2. **A/M/F filtering is non-optional.** VRTX's 66 filings contain 42 F-codes (tax-withholding via share surrender, auto-triggered on vest) and 30 A-codes (grants). Without filtering these from the baseline AND from the in-window count, every Vertex exec looks like a high-volume discretionary trader. Confirms §3.
+
+3. **Plan-adoption-date extraction needs a Haiku call, not regex.** The regex `(plan adopted|adopted on|entered into on|pursuant to ... entered into on) <DATE>` matched 50% of PLTR 10b5-1 footnotes and 0% of VRTX's. Filer-template language varies widely. Phase 1 should make this a structured-output Haiku call against `Form4.footnotes` text (Form4Plan extraction), not a hand-rolled regex. Logged here so we don't waste effort tuning regex.
+
+4. **10b5-1 footnote hit-rate varies sharply by issuer.** PLTR 73% vs VRTX 48% in the same window. Hit-rate alone isn't a reliable plan-vs-discretionary classifier — it depends on filer-template conventions. Phase 1 should treat footnote-text scan as a *signal*, not a *decision rule*.
+
+5. **Code `G` (gift) seen in the wild.** Rare but real (1 instance in PLTR's 11 filings). Currently ignored; revisit if eval miss is traced to one.
 
 ## §4 — SEC EDGAR fair-access policy
 
