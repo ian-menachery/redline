@@ -1,0 +1,38 @@
+# Data and secrets
+data/
+!data/.gitkeep
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.python-version
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Spike scratch (graduate or delete before Phase 1)
+spike/scratch/
+
+# Local Claude session artifacts
+.claude/
