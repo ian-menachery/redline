@@ -1,0 +1,71 @@
+# Pre-registered eval events for redline.
+#
+# Phase 0.5 sub-set: 3 of the 12 planned events, chosen to stress-test the
+# Pydantic schema across all three subsystem-tag types that show up in the
+# full set (diff_analyzer, correlator, and the parser/event_detection pair
+# that appears later). The full 12 are added in early Phase 1 alongside
+# event 6's downstream eval logic. Each entry's locked_at timestamp is
+# the pre-registration receipt — see CLAUDE.md §4.5.
+
+- id: key_10k_fy22
+  ticker: KEY
+  filing_type: 10-K
+  period: FY2022
+  tests:
+    - diff_analyzer
+  pass_criteria: >
+    flagged_events.materiality_max >= 0.6
+    AND any(t in diff_summary.affected_topics for t in [
+      "available-for-sale", "afs", "deposits", "deposit_composition",
+      "capital_ratio", "unrealized_losses"
+    ])
+  llm_judge_rubric: >
+    A pass requires the diff analyzer to surface at least one of these
+    FY2021 -> FY2022 disclosure shifts: large unrealized losses on
+    available-for-sale (AFS) securities, deposit-composition or
+    deposit-flight language, or capital-ratio sensitivity expansion.
+    The system must identify at least one of these themes as material,
+    not merely include the words in passing.
+  locked_at: 2026-05-11T17:30:00Z
+
+- id: cvna_10k_fy22
+  ticker: CVNA
+  filing_type: 10-K
+  period: FY2022
+  tests:
+    - diff_analyzer
+  pass_criteria: >
+    flagged_events.materiality_max >= 0.6
+    AND any(t in diff_summary.affected_topics for t in [
+      "liquidity", "going_concern", "substantial_doubt",
+      "debt_covenant", "refinancing"
+    ])
+  llm_judge_rubric: >
+    A pass requires the diff analyzer to flag heightened liquidity-related
+    risk language between Carvana's FY2021 and FY2022 10-Ks — including
+    any going-concern-adjacent or substantial-doubt-style disclosures, or
+    materially expanded debt-refinancing risk language. The system must
+    identify the liquidity-stress theme, not just summarize unchanged
+    boilerplate.
+  locked_at: 2026-05-11T17:30:00Z
+
+- id: pltr_karp_form4_2024
+  ticker: PLTR
+  filing_type: 4-cluster
+  period: 2024-11-01:2024-12-31
+  tests:
+    - correlator
+  pass_criteria: >
+    correlator_payload.anomalous == true
+    AND any("Karp" in d for d in correlator_payload.drivers)
+    AND correlator_payload.confidence >= 0.7
+  llm_judge_rubric: >
+    A pass requires the correlator to flag the November 2024 Alexander
+    Karp Form 4 cluster (multiple large open-market sales executed
+    pursuant to a pre-existing 10b5-1 plan, but anomalous in concentration
+    around the AIP-launch news cycle) as anomalous. Karp must be named
+    as a primary driver. Acceptable if the system identifies the cluster
+    via volume z-score, multi-day concentration, or multi-insider clustering;
+    not acceptable if it merely lists Karp transactions without an
+    anomaly classification.
+  locked_at: 2026-05-11T17:30:00Z

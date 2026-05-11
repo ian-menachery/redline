@@ -1,0 +1,43 @@
+# Watchlist for redline (locked Phase 0). CIK is authoritative; ticker is a label.
+# Sector taxonomy: tech | financials | healthcare | consumer.
+# See CLAUDE.md §4.6 (locked decision: 8 tickers, 4 sectors).
+
+- cik: "0001321655"
+  ticker: PLTR
+  name: Palantir Technologies Inc.
+  sector: tech
+
+- cik: "0001477333"
+  ticker: NET
+  name: Cloudflare, Inc.
+  sector: tech
+
+- cik: "0000316709"
+  ticker: SCHW
+  name: Schwab Charles Corp
+  sector: financials
+
+- cik: "0000091576"
+  ticker: KEY
+  name: KeyCorp
+  sector: financials
+
+- cik: "0001682852"
+  ticker: MRNA
+  name: Moderna, Inc.
+  sector: healthcare
+
+- cik: "0000875320"
+  ticker: VRTX
+  name: Vertex Pharmaceuticals Inc
+  sector: healthcare
+
+- cik: "0001690820"
+  ticker: CVNA
+  name: Carvana Co.
+  sector: consumer
+
+- cik: "0001403568"
+  ticker: ULTA
+  name: Ulta Beauty, Inc.
+  sector: consumer

@@ -1,0 +1,12 @@
+[project]
+name = "redline"
+version = "0.0.1"
+description = "Scheduled SEC EDGAR monitoring with QoQ section diffs + Form 4 correlation."
+requires-python = ">=3.11"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
