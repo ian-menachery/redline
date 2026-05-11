@@ -31,8 +31,9 @@ env/
 Thumbs.db
 desktop.ini
 
-# Spike scratch (graduate or delete before Phase 1)
+# Spike scratch + runtime outputs (graduate or delete before Phase 1)
 spike/scratch/
+spike/*.json
 
 # Local Claude session artifacts
 .claude/

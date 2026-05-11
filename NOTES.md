@@ -8,6 +8,27 @@ Risk Factors sections are notorious for year-over-year copy-paste with minor leg
 
 **Day-0 validation task (Phase 0.5):** before committing to Stage 1 / Stage 2 prompt logic, manually diff PLTR Q2 2024 vs Q3 2024 Risk Factors by eye. Confirm there ARE real changes worth surfacing. If 80%+ of the diff is boilerplate moves and counsel reword, that's a Stage 1 + Stage 2 calibration signal — the noise filter has to be aggressive or the system flags everything.
 
+### Day-0 manual diff — scratchpad
+
+**Filings to compare:**
+
+| Quarter | Accession | Filed | Period end | EDGAR index URL |
+|---|---|---|---|---|
+| Q3 2024 | `0001321655-24-000209` | 2024-11-05 | 2024-09-30 | https://www.sec.gov/Archives/edgar/data/1321655/000132165524000209/0001321655-24-000209-index.htm |
+| Q2 2024 | `0001321655-24-000135` | 2024-08-06 | 2024-06-30 | https://www.sec.gov/Archives/edgar/data/1321655/000132165524000135/0001321655-24-000135-index.htm |
+
+Risk Factors live at **Part II, Item 1A** in each 10-Q. Spike confirmed extraction returns ~298k chars for Q3 2024 and similar order of magnitude for Q2 2024.
+
+**Reading template — fill one row per noticed change. Aim for 15–30 rows total.**
+
+| # | Change (1-line summary) | Substantive? (y/n) | Class (new-risk / reword / moved / boilerplate) | Notes |
+|---|---|---|---|---|
+| 1 | _(example) Added language about export controls on AI/ML to government customers_ | y | new-risk | Captures real evolving exposure |
+| 2 | | | | |
+| 3 | | | | |
+
+**Calibration question to answer at the end:** of the rows marked substantive, what fraction would a sensible reader want to see surfaced on a dashboard? That fraction is roughly the materiality bar Stage 3 should target.
+
 ## §2 — Form 4 / 10b5-1 quirks
 
 The 10b5-1 plan filter (`ARCHITECTURE.md` §5) has four edge cases worth memorializing:
@@ -59,7 +80,34 @@ Placeholder. Filled during Phase 0.5 Day 0 spike. Things to investigate and docu
 
 Each finding gets a dated entry below.
 
-_(empty)_
+### 2026-05-11 — Initial spike findings (edgartools 5.31.0)
+
+**Section access on 10-Q (PLTR Q3 2024, accession `0001321655-24-000209`):**
+- `Filing.obj()` returns a `TenQ` object. The `.items` attribute lists items as strings like `'Part II, Item 1A'`, `'Part I, Item 2'`, etc. — 11 items for a typical 10-Q.
+- **Correct API for section text:** `tenq.get_item_with_part(part, item)` — **part comes first, then item.** First instinct of `("Item 1A", "Part II")` silently returns `None`; correct call `("Part II", "Item 1A")` returns 297,913 chars of Risk Factors. Reverse-arg failure mode is silent — wrap with a sanity check (`len > 0`) in the Phase 1 parser.
+- MD&A is at `("Part I", "Item 2")` → ~50k chars.
+- Alternative path: `tenq.document.get_sec_section(...)` or `tenq.document.get_section(...)` exist; not probed further since `get_item_with_part` works.
+- `Filing.markdown()` also returns the entire filing as markdown (~526k chars for that 10-Q) — usable as a fallback or for the chunked Stage 1 input.
+
+**Form 4 (PLTR Karp 2024 cluster):**
+- `Filing.obj()` returns a `Form4` object. `to_dataframe()` returns a clean per-transaction DataFrame with 13 columns: `Transaction Type`, `Code`, `Description`, `Shares`, `Price`, `Value`, `Date`, `Form`, `Issuer`, `Ticker`, `Insider`, `Position`, `Remaining Shares`.
+- Transaction codes seen in the Karp 2024 cluster: `S` (Sale), `M` (Derivative_Sale / Option Exercise), `C` (Conversion). Consistent with `NOTES.md` §3.
+- Karp's Nov 2024 selling pattern (from spike sample): on 2024-11-13 alone, exercised + sold ~6.3M shares worth ~$400M. Three sequential Form 4s (Nov 15, Nov 20, Nov 22) cover staggered tranches.
+- **10b5-1 indicator is NOT exposed as a structured attribute.** No `Form4` field contains "10b5", "plan", "rule", or "trading" in its name. The raw XML accessible via `Filing.xml()` (23k chars) does not contain XBRL-style tags like `rule10b5_1Flag` or `tradingPlan`.
+- **10b5-1 status IS reliably present in `Form4.footnotes`** (a dict-like `Footnotes` object). Karp Nov 15 2024 filing's footnote `F1`: *"This transaction is part of a related series of transactions undertaken on November 13, 2024 pursuant to a preexisting Rule 10b5-1 trading plan, intended to satisfy the affirmative defense conditions of Rule 10b5-1(c), entered into on December 12, 2023."* Plan-adoption date IS extractable from this text.
+- **Decision for Phase 1:** detect 10b5-1 via regex on `Form4.footnotes` text. If accuracy is poor in eval, fall back to raw XML parsing of the form's primary document (`Attachments` exposes the `.xml` file). The free-text approach also generalizes to the pre-2023 plan case (`NOTES.md` §2), so a single code path covers both regimes.
+
+**8-K (CVNA 2023-07-19, debt restructuring):**
+- Two 8-Ks on that date:
+  - `0001193125-23-189188` — items `['Item 1.01', 'Item 7.01', 'Item 9.01']`, 6 exhibits, no press release. Item 1.01 = Entry into Material Definitive Agreement — this is the actual restructuring announcement.
+  - `0001690820-23-000218` — items `['Item 2.02', 'Item 9.01']`, 3 exhibits, has press release. Item 2.02 = Results of Operations — likely a preliminary earnings update co-filed.
+- `CurrentReport.items` returns a clean list of item-number strings. Works as expected; no surprises.
+
+**Encoding note (Windows):** writing UTF-8 chars (e.g. arrow `→`) to stdout crashes on Windows default cp1252. Force `sys.stdout.reconfigure(encoding="utf-8")` at the top of any script that prints non-ASCII. Phase 1 implication: all CLI tools should set this explicitly.
+
+**Open follow-ups (Phase 0.5 task 4):**
+- Form 4 distribution inspection across ~3 months for PLTR + VRTX to inform anomaly score combination formula + `volume_baseline_window` default.
+- The raw XML for Karp Nov 2024 Form 4 didn't contain expected XBRL-style 10b5-1 tags — worth confirming on a 2024 Form 4 from a different issuer to rule out a Palantir-specific filer-software quirk.
 
 ## §6 — Eval set hard cases worth flagging
 
