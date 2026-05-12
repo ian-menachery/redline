@@ -408,15 +408,13 @@ def _render_sidebar(conn: sqlite3.Connection) -> dict:
     # Filters
     st.sidebar.markdown("**Filters**")
     watchlist = _watchlist(conn)
-    company_opts = ["All companies"] + [f"{w['name']} ({w['ticker']})" for w in watchlist]
-    company_sel = st.sidebar.selectbox("Company", company_opts)
-    selected_ticker = None
-    if company_sel != "All companies":
-        # "Carvana Co. (CVNA)" -> "CVNA"
-        try:
-            selected_ticker = company_sel.rsplit("(", 1)[1].rstrip(")")
-        except IndexError:
-            selected_ticker = None
+    company_opts: list[tuple[str, str | None]] = [("All companies", None)] + [
+        (f"{w['name']} ({w['ticker']})", w["ticker"]) for w in watchlist
+    ]
+    company_label = st.sidebar.selectbox(
+        "Company", [o[0] for o in company_opts], key="filter_company",
+    )
+    selected_ticker = next(o[1] for o in company_opts if o[0] == company_label)
 
     filing_type_opts: list[tuple[str, str | None]] = [
         ("All filings", None),
@@ -426,7 +424,7 @@ def _render_sidebar(conn: sqlite3.Connection) -> dict:
         ("Insider transactions", "4"),
     ]
     ft_label = st.sidebar.selectbox(
-        "Filing type", [o[0] for o in filing_type_opts]
+        "Filing type", [o[0] for o in filing_type_opts], key="filter_filing_type",
     )
     filing_type_sel = next(o[1] for o in filing_type_opts if o[0] == ft_label)
 
@@ -436,7 +434,7 @@ def _render_sidebar(conn: sqlite3.Connection) -> dict:
         ("Unusual insider trading", "correlator_anomaly"),
     ]
     fl_label = st.sidebar.selectbox(
-        "Type of finding", [o[0] for o in flag_opts]
+        "Type of finding", [o[0] for o in flag_opts], key="filter_flag_reason",
     )
     flag_reason_sel = next(o[1] for o in flag_opts if o[0] == fl_label)
 
@@ -446,7 +444,8 @@ def _render_sidebar(conn: sqlite3.Connection) -> dict:
         "Major only": 0.8,
     }
     sev_label = st.sidebar.selectbox(
-        "Minimum severity", list(severity_options.keys()), index=0
+        "Minimum severity", list(severity_options.keys()),
+        index=0, key="filter_severity",
     )
     min_materiality = severity_options[sev_label]
 
@@ -657,10 +656,17 @@ def main() -> None:
     _inject_css()
     conn = _conn()
 
+    # Render the sidebar BEFORE the main-area hero. The hero uses
+    # ``st.columns`` and ``st.expander``; with Streamlit 1.57.0 those,
+    # rendered first, intermittently break downstream sidebar widgets'
+    # delta-path identity so their session state stops persisting across
+    # reruns. Calling the sidebar first avoids the interaction. Visual
+    # layout is unchanged (the sidebar renders left regardless of order).
+    filters = _render_sidebar(conn)
+
     _render_hero(conn)
     st.divider()
 
-    filters = _render_sidebar(conn)
     events = _flagged_filings(conn, **filters)
 
     if not events:
