@@ -35,6 +35,8 @@ from redline.config import (
 from redline.fetcher import (
     MAX_RETRIES,
     _detect_10b5_1,
+    _is_issuer_placeholder,
+    _normalize_company_name,
     run_once,
 )
 from redline.storage.db import connect
@@ -328,6 +330,71 @@ def test_run_once_form4_populates_transactions(db):
     assert txs[0]["price"] == 60.0
     assert txs[0]["is_10b5_1"] == 1
     assert txs[0]["plan_adopted_date"] == "2023-12-12"
+
+
+# ---- issuer-name placeholder filter --------------------------------------
+
+
+def test_normalize_company_name_strips_suffix_and_punct():
+    assert _normalize_company_name("Palantir Technologies Inc.") == "palantir technologies"
+    assert _normalize_company_name("PALANTIR TECHNOLOGIES, INC") == "palantir technologies"
+    assert _normalize_company_name("Carvana Co.") == "carvana"
+    assert _normalize_company_name("Vertex Pharmaceuticals Inc") == "vertex pharmaceuticals"
+
+
+def test_is_issuer_placeholder_matches_variants():
+    issuer = "Palantir Technologies Inc."
+    assert _is_issuer_placeholder("Palantir Technologies Inc.", issuer) is True
+    assert _is_issuer_placeholder("PALANTIR TECHNOLOGIES, INC", issuer) is True
+    assert _is_issuer_placeholder("Palantir Technologies, Inc.", issuer) is True
+
+
+def test_is_issuer_placeholder_keeps_real_insiders():
+    issuer = "Palantir Technologies Inc."
+    assert _is_issuer_placeholder("Alexander C. Karp", issuer) is False
+    assert _is_issuer_placeholder("Karp Alexander C", issuer) is False
+    # A different corporate insider (e.g. 10% owner) is real signal, not a placeholder.
+    assert _is_issuer_placeholder("Vanguard Group Inc.", issuer) is False
+
+
+def test_run_once_form4_skips_issuer_name_placeholders(db):
+    """Form 4 rows whose Insider == issuer name are dropped at ingest."""
+    # The default fixture seeds Palantir with name='Palantir'. To exercise the
+    # production-realistic path, replace it with the full company name.
+    db.execute(
+        "UPDATE watchlist SET name = ? WHERE cik = ?",
+        ("Palantir Technologies Inc.", "0001321655"),
+    )
+    _seed_filing(db, accession="acc-f4-mixed", filing_type="4")
+    obj = _mock_form4(
+        insider_name="Palantir Technologies Inc.",
+        transactions=[
+            # Real insider row — keep.
+            {"Code": "S", "Shares": 100000, "Price": 60.0,
+             "Date": "2024-11-15", "Insider": "Karp Alexander C",
+             "Description": "Open Market Sale"},
+            # Issuer-name placeholder row — skip (NOTES.md §11).
+            {"Code": "S", "Shares": 1, "Price": 0.10,
+             "Date": "2024-11-15", "Insider": "Palantir Technologies Inc.",
+             "Description": ""},
+            # Case + punct variant of the issuer — skip.
+            {"Code": "S", "Shares": 1, "Price": 0.10,
+             "Date": "2024-11-15", "Insider": "PALANTIR TECHNOLOGIES, INC",
+             "Description": ""},
+        ],
+    )
+    filing = _mock_filing(obj)
+    with patch("redline.fetcher.edgar") as mock_edgar:
+        mock_edgar.find.return_value = filing
+        run_once(_config(), db)
+
+    txs = db.execute(
+        "SELECT insider_name, shares FROM form4_transactions WHERE accession = ?",
+        ("acc-f4-mixed",),
+    ).fetchall()
+    assert len(txs) == 1
+    assert txs[0]["insider_name"] == "Karp Alexander C"
+    assert txs[0]["shares"] == 100000
 
 
 def test_form4_reparse_replaces_transactions(db):

@@ -244,27 +244,6 @@ def _edgar_url(accession: str, cik: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Data-quality caveat detection
-# ---------------------------------------------------------------------------
-
-def _is_known_data_quality_caveat(event: dict, payload: dict | None) -> bool:
-    """Detect the documented Phase 1 issuer-name-as-insider bug.
-
-    When a correlator-flagged event's drivers include the issuer's own name
-    rather than a person, we know the Form 4 parser picked up an
-    issuer-name placeholder as an insider (NOTES.md §11). Phase 2 LLM
-    extractor will filter these at the data layer.
-    """
-    if event.get("flag_reason") != "correlator_anomaly" or not payload:
-        return False
-    company_name = (event.get("company_name") or "").lower()
-    if not company_name:
-        return False
-    drivers = (payload.get("verdict") or {}).get("drivers") or []
-    return any(company_name in (d or "").lower() for d in drivers)
-
-
-# ---------------------------------------------------------------------------
 # Headline synthesis
 # ---------------------------------------------------------------------------
 
@@ -321,10 +300,10 @@ _CSS = """
     margin-right: 10px;
     vertical-align: middle;
   }
-  .severity-major   { background: #fbecec; color: #c0392b; border: 1px solid #e8b5b5; }
-  .severity-notable { background: #fdf4e7; color: #b97a0a; border: 1px solid #f0d3a8; }
-  .severity-minor   { background: #ecf0f1; color: #5d6d7e; border: 1px solid #cfd8dc; }
-  .severity-routine { background: #f4f6f7; color: #7f8c8d; border: 1px solid #d6dbe0; }
+  .severity-major   { background: #fbecec; color: #a02519; border: 1px solid #d99494; }
+  .severity-notable { background: #fdf4e7; color: #8a5a08; border: 1px solid #d9b27a; }
+  .severity-minor   { background: #e3e8ec; color: #34495e; border: 1px solid #95a5b3; }
+  .severity-routine { background: #ebeef1; color: #4a5b6a; border: 1px solid #a8b5be; }
 
   /* Topic chips */
   .topic-chip {
@@ -337,19 +316,6 @@ _CSS = """
     font-size: 0.78rem;
     margin: 3px 4px 3px 0;
   }
-
-  /* Caveat banner */
-  .caveat-banner {
-    background: #fdf4e7;
-    color: #5e4422;
-    border: 1px solid #f0d3a8;
-    padding: 10px 14px;
-    border-radius: 4px;
-    font-size: 0.86rem;
-    margin: 8px 0 14px 0;
-    line-height: 1.5;
-  }
-  .caveat-banner a { color: #1e3a5f; }
 
   /* Card meta row */
   .meta-row {
@@ -409,9 +375,10 @@ def _render_hero(conn: sqlite3.Connection) -> None:
             "**Accuracy.** The system has been measured against three historical filing events: "
             "KeyCorp's FY2022 deposit-and-rate-environment disclosures, Carvana's FY2022 "
             "liquidity stress, and Palantir's late-2024 insider-trading pattern. It correctly "
-            "surfaced the disclosure shifts at KeyCorp and Carvana. The Palantir case is "
-            "documented as a known limitation around how the system filters out scheduled "
-            "(10b5-1 plan-driven) trades — see the caveat note on that finding below."
+            "surfaced the disclosure shifts at KeyCorp and Carvana. The Palantir case is a "
+            "documented design trade-off: every Karp transaction in that window was executed "
+            "under a pre-arranged 10b5-1 trading plan, and the system intentionally excludes "
+            "plan-driven trades since they're uncorrelated with then-current filings by design."
         )
 
 
@@ -563,23 +530,6 @@ def _render_finding_card(conn: sqlite3.Connection, event: dict) -> None:
             unsafe_allow_html=True,
         )
 
-        # Caveat banner for known data-quality issues
-        if _is_known_data_quality_caveat(event, payload):
-            st.markdown(
-                '<div class="caveat-banner">'
-                "⚠ <strong>Known data-quality caveat.</strong> "
-                "This finding reflects a limitation in how the system parses Form 4 "
-                "transaction records — issuer-name placeholders are occasionally "
-                "treated as if they were insiders. The signal worth flagging here "
-                "(Karp's November 2024 sales) is correctly excluded by the system, "
-                "because those sales were executed under a pre-arranged 10b5-1 trading "
-                "plan — by design, plan-driven trades aren't treated as "
-                "insider-information signals. "
-                '<a href="https://github.com/ian-menachery/redline/blob/master/NOTES.md#11--eval-findings-phase-1" target="_blank">Technical detail.</a>'
-                "</div>",
-                unsafe_allow_html=True,
-            )
-
         # Headline
         st.markdown(f"#### {headline}")
 
@@ -715,8 +665,10 @@ def main() -> None:
 
     if not events:
         st.info(
-            "No findings match the current filters. "
-            "Loosen the severity filter or clear filters in the sidebar."
+            "**No findings match the current filters.**\n\n"
+            "Try widening the search: lower the minimum severity, switch to "
+            "**All companies**, or set the filing type back to **All filings**. "
+            "The default view (no filters applied) shows every flagged event."
         )
         return
 

@@ -1,8 +1,12 @@
 # redline
 
+![tests](https://img.shields.io/badge/tests-116%20passing-2c7a3f) ![python](https://img.shields.io/badge/python-3.11%2B-3776ab) ![llm](https://img.shields.io/badge/llm-OpenAI%20%2B%20Anthropic-1e3a5f) ![dashboard](https://img.shields.io/badge/dashboard-Streamlit-ff4b4b) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
+
 Scheduled SEC EDGAR monitoring for a fixed 8-ticker watchlist. Detects substantive QoQ/YoY changes in 10-K / 10-Q section disclosures via a three-stage diff filter, joins Form 4 insider transactions to filing events on a ±14-day window, and surfaces flagged events through a Streamlit dashboard. Includes a pre-registered eval harness measuring accuracy against historical filing events.
 
-**Status:** Phase 1 MVP complete. **2/3** on the 3 of 12 pre-registered eval events (tag [`eval-pre-registration-v1`](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1)). 112/112 tests passing. Total OpenAI spend across the entire build: **$1.27**.
+**Status:** Phase 1 MVP complete. **2/3** on the 3 of 12 pre-registered eval events (tag [`eval-pre-registration-v1`](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1)). 116/116 tests passing. Total OpenAI spend across the entire build: **$1.27**.
+
+![dashboard screenshot](docs/dashboard.png)
 
 ---
 
@@ -15,7 +19,7 @@ Scheduled SEC EDGAR monitoring for a fixed 8-ticker watchlist. Detects substanti
 | Cadence | 15-minute polling, EDGAR fair-access compliant |
 | LLM provider | OpenAI today (`gpt-4o-mini` cheap-role + `gpt-4o` quality-role), automatic fallover to Anthropic on `insufficient_quota` |
 | Pipeline state machine | `fetched → parsed → analyzed → flagged` with retry queue (3 retries, 1-hour window) |
-| Tests | 112 passing |
+| Tests | 116 passing |
 | Real LLM spend across the entire build | $1.27 |
 
 ---
@@ -70,7 +74,35 @@ All three would weaken the result. **2/3 with documented reasoning is stronger t
 
 ## Architecture — five subsystems, status-driven pipeline
 
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the mermaid diagram, full SQLite schema, and per-subsystem internals.
+```mermaid
+flowchart LR
+    EDGAR[EDGAR<br/>fair-access API]
+    POLL[Poller<br/>15-min cadence]
+    FETCH[Fetcher<br/>+ cache]
+    PARSE[Parser<br/>section extraction]
+    DIFF[Diff Analyzer<br/>3-stage filter]
+    CORR[Correlator<br/>Form 4 + ±14d]
+    DB[(SQLite)]
+    DASH[Streamlit Dashboard<br/>read-only]
+    ALERT[Email/push alerts<br/>Phase 2]
+    EVAL[Eval Harness<br/>12 events]
+    REPLAY[Replay Mode<br/>point-in-time]
+
+    EDGAR --> POLL --> FETCH --> PARSE
+    PARSE --> DIFF
+    PARSE --> CORR
+    DIFF --> DB
+    CORR --> DB
+    POLL --> DB
+    FETCH --> DB
+    DB --> DASH
+    DB --> ALERT
+    REPLAY --> PARSE
+    EVAL --> REPLAY
+    EVAL --> DB
+```
+
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full SQLite schema and per-subsystem internals.
 
 1. **EDGAR poller** ([`src/redline/poller.py`](src/redline/poller.py)) — 15-min cadence, watchlist-driven, last-seen accession cursor in SQLite. Fair-access compliant: ≤10 req/sec, descriptive User-Agent, exponential backoff. First-run logic seeds one filing per ticker so the dashboard has content immediately.
 
@@ -152,7 +184,7 @@ All locked in [`CLAUDE.md`](CLAUDE.md) §4. Each survived a critical review pass
 - **`edgartools`** for EDGAR access
 - **OpenAI SDK** + **Anthropic SDK** behind a provider-agnostic client with exception-driven fallover
 - **Streamlit** for the dashboard
-- **pytest** — 112 tests covering parsers, three-stage filter, anomaly signals, eval grader, LLM client, and storage
+- **pytest** — 116 tests covering parsers, three-stage filter, anomaly signals, eval grader, LLM client, and storage
 
 ---
 

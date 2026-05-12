@@ -270,7 +270,7 @@ The eval criterion was written under the assumption that Karp's Nov 2024 selling
 Per `CLAUDE.md` §4.5: this event stays at FAIL in the scorecard. The README will explain: "8/12 and here's what the 4 misses taught me" is a stronger story than swapping the criterion to make it pass.
 
 **Phase 2 follow-ups identified by this miss:**
-- Form 4 parser: filter out issuer-name placeholders from `insider_name` (or distinguish in a separate column). Currently they pollute the discretionary set with admin events.
+- ~~Form 4 parser: filter out issuer-name placeholders from `insider_name`.~~ **Landed.** `_is_issuer_placeholder` in `fetcher.py` normalizes corporate suffixes (Inc., Corp., Co., LLC, etc.) and skips rows whose insider equals the filing's issuer name. 7 spurious PLTR rows removed from `form4_transactions`; PLTR Q3 2024 re-runs as `anomalous=False` (52 trades in window, all 10b5-1 plan-driven, 0 discretionary). 4 new tests in `tests/test_fetcher.py`.
 - LLM-judge fallback would have helped here: the rubric explicitly says "Karp identified as a primary contributor," which the criterion encodes literally. A judge call could note "Karp's trades were correctly filtered as plan-driven; the criterion is inconsistent with the locked 10b5-1 design" and return partial credit. (Phase 1 grader only falls back to judge when binary returns None, not when binary returns False — Phase 2 could broaden the trigger.)
 - Possibly revise eval event #6 in a Phase 2 pre-registration v2 (separate tag, separate `locked_at`) to test a different aspect of the correlator that doesn't conflict with locked design.
 

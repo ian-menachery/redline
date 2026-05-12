@@ -63,6 +63,54 @@ _PLAN_DATE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Issuer-name-as-insider detection — see NOTES.md §11. Form 4 rows that
+# carry the filing's own issuer name in the Insider field are parser
+# placeholders, not real insider transactions, and should be skipped at
+# ingest so they don't pollute the correlator's discretionary set.
+_CORP_SUFFIXES = (
+    "inc", "incorporated", "corp", "corporation", "co", "company",
+    "ltd", "limited", "llc", "lp", "plc", "trust",
+)
+_CORP_SUFFIX_RE = re.compile(
+    r"\b(?:" + "|".join(_CORP_SUFFIXES) + r")\.?$",
+    re.IGNORECASE,
+)
+
+
+def _normalize_company_name(name: str) -> str:
+    """Lowercase + strip trailing corporate suffixes and punctuation.
+
+    Used by ``_is_issuer_placeholder`` to compare a Form 4 insider name
+    against the filing's issuer. Handles common variants:
+    ``"Palantir Technologies Inc."`` / ``"PALANTIR TECHNOLOGIES, INC"`` /
+    ``"Palantir Technologies, Inc."`` all collapse to
+    ``"palantir technologies"``.
+    """
+    if not name:
+        return ""
+    s = name.lower().strip()
+    # Strip nested suffixes ("Co., Inc." -> "co.," -> "co" -> "").
+    while True:
+        s = s.rstrip(".,; ")
+        prev = s
+        s = _CORP_SUFFIX_RE.sub("", s).rstrip(".,; ")
+        if s == prev:
+            break
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _is_issuer_placeholder(
+    insider_name: str | None, issuer_name: str | None,
+) -> bool:
+    """True iff the insider field carries the issuer's company name."""
+    if not insider_name or not issuer_name:
+        return False
+    a = _normalize_company_name(insider_name)
+    b = _normalize_company_name(issuer_name)
+    if not a or not b:
+        return False
+    return a == b
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -190,11 +238,15 @@ def _detect_10b5_1(footnotes_text: str) -> tuple[bool | None, str | None]:
         return True, None
 
 
-def _extract_form4(obj) -> tuple[dict, dict, list[dict]]:
+def _extract_form4(
+    obj, *, issuer_name: str | None = None,
+) -> tuple[dict, dict, list[dict]]:
     """Form 4 extraction. Returns (sections_payload, is_empty, tx_rows).
 
     ``tx_rows`` is a list of dicts ready to insert into ``form4_transactions``.
     The sections payload mirrors the structured surface for the dashboard.
+    When ``issuer_name`` is provided, rows whose insider field equals the
+    issuer name (parser placeholders) are skipped — see NOTES.md §11.
     """
     footnotes_obj = getattr(obj, "footnotes", None)
     footnotes_text = str(footnotes_obj) if footnotes_obj else ""
@@ -227,13 +279,16 @@ def _extract_form4(obj) -> tuple[dict, dict, list[dict]]:
             trade_date = str(date_val)[:10] if date_val is not None else None
             if not trade_date:
                 continue
+            row_insider = str(row.get("Insider") or insider_name)
+            if _is_issuer_placeholder(row_insider, issuer_name):
+                continue
             price_val = row.get("Price")
             try:
                 price = float(price_val) if price_val is not None and not _isnan(float(price_val)) else None
             except (TypeError, ValueError):
                 price = None
             tx_rows.append({
-                "insider_name": str(row.get("Insider") or insider_name),
+                "insider_name": row_insider,
                 "trade_date": trade_date,
                 "code": code,
                 "shares": shares,
@@ -369,7 +424,9 @@ def _pending_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def _parse_one(filing, filing_type: str) -> tuple[dict, dict, list[dict]]:
+def _parse_one(
+    filing, filing_type: str, *, issuer_name: str | None = None,
+) -> tuple[dict, dict, list[dict]]:
     """Dispatch by filing type. Returns (sections, is_empty, tx_rows)."""
     obj = filing.obj()
     if filing_type == "10-K":
@@ -382,8 +439,15 @@ def _parse_one(filing, filing_type: str) -> tuple[dict, dict, list[dict]]:
         sections, is_empty = _extract_8k(obj)
         return sections, is_empty, []
     if filing_type == "4":
-        return _extract_form4(obj)
+        return _extract_form4(obj, issuer_name=issuer_name)
     raise ValueError(f"Unsupported filing_type: {filing_type!r}")
+
+
+def _issuer_name_for_cik(conn: sqlite3.Connection, cik: str) -> str | None:
+    row = conn.execute(
+        "SELECT name FROM watchlist WHERE cik = ?", (cik,),
+    ).fetchone()
+    return row["name"] if row else None
 
 
 def run_once(config: RedlineConfig, conn: sqlite3.Connection) -> dict:
@@ -406,7 +470,12 @@ def run_once(config: RedlineConfig, conn: sqlite3.Connection) -> dict:
         retry_count = row["retry_count"]
         try:
             filing = edgar.find(accession)
-            sections, is_empty, tx_rows = _parse_one(filing, filing_type)
+            issuer_name = (
+                _issuer_name_for_cik(conn, cik) if filing_type == "4" else None
+            )
+            sections, is_empty, tx_rows = _parse_one(
+                filing, filing_type, issuer_name=issuer_name,
+            )
             raw = _get_raw_content(filing)
             _insert_content(
                 conn, accession=accession, raw=raw,
