@@ -1,6 +1,7 @@
 # Data and secrets
 data/*
 !data/.gitkeep
+!data/demo.db
 .env
 .env.local
 .env.*.local

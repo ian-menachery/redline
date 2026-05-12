@@ -7,6 +7,7 @@ they change too infrequently to warrant a config knob.
 """
 from __future__ import annotations
 
+import os
 import tomllib
 from pathlib import Path
 
@@ -61,4 +62,10 @@ class RedlineConfig(BaseModel):
     def from_toml(cls, path: str | Path = "config/settings.toml") -> "RedlineConfig":
         with Path(path).open("rb") as f:
             data = tomllib.load(f)
+        # REDLINE_DB_PATH overrides storage.db_path. Used by the hosted
+        # Streamlit Cloud deployment to point at the committed read-only
+        # snapshot (data/demo.db) without disturbing local poller writes
+        # to the gitignored data/redline.db.
+        if env_db := os.environ.get("REDLINE_DB_PATH"):
+            data.setdefault("storage", {})["db_path"] = env_db
         return cls(**data)
