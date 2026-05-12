@@ -47,6 +47,45 @@ CREATE INDEX IF NOT EXISTS idx_filings_seen_status_attempt
     ON filings_seen (status, last_attempted);
 """
 
+# Subsystem 2 (fetcher + parser) owns these.
+FILINGS_CONTENT_DDL = """
+CREATE TABLE IF NOT EXISTS filings_content (
+    accession      TEXT PRIMARY KEY REFERENCES filings_seen(accession),
+    raw_content    BLOB,
+    sections       TEXT NOT NULL,
+    is_empty       TEXT NOT NULL,
+    parser_version TEXT NOT NULL,
+    extracted_at   TIMESTAMP NOT NULL
+);
+"""
+
+# Subsystem 2 populates this; Subsystem 4 (correlator) reads from it.
+# Schema deviation from ARCHITECTURE.md §10: ownership and insider_cik are
+# nullable in Phase 1 because reliable extraction from edgartools is
+# best-effort (see NOTES §3.1). Phase 2 can tighten when an LLM-based
+# extractor lands.
+FORM4_TRANSACTIONS_DDL = """
+CREATE TABLE IF NOT EXISTS form4_transactions (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    accession         TEXT NOT NULL REFERENCES filings_seen(accession),
+    cik               TEXT NOT NULL,
+    insider_cik       TEXT,
+    insider_name      TEXT NOT NULL,
+    trade_date        DATE NOT NULL,
+    code              TEXT NOT NULL,
+    shares            REAL NOT NULL,
+    price             REAL,
+    ownership         TEXT,
+    is_10b5_1         INTEGER,
+    plan_adopted_date DATE,
+    explanation       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_form4_tx_cik_date
+    ON form4_transactions (cik, trade_date);
+CREATE INDEX IF NOT EXISTS idx_form4_tx_insider_date
+    ON form4_transactions (insider_name, trade_date);
+"""
+
 
 def init_full_schema(conn: sqlite3.Connection) -> None:
     """Idempotently create every table any subsystem in redline currently uses.
@@ -58,6 +97,8 @@ def init_full_schema(conn: sqlite3.Connection) -> None:
     _init_llm_call_log(conn)
     conn.executescript(WATCHLIST_DDL)
     conn.executescript(FILINGS_SEEN_DDL)
+    conn.executescript(FILINGS_CONTENT_DDL)
+    conn.executescript(FORM4_TRANSACTIONS_DDL)
 
 
 def seed_watchlist_from_yaml(conn: sqlite3.Connection, path: str | Path) -> int:
