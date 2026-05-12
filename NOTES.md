@@ -273,3 +273,29 @@ Per `CLAUDE.md` §4.5: this event stays at FAIL in the scorecard. The README wil
 - Form 4 parser: filter out issuer-name placeholders from `insider_name` (or distinguish in a separate column). Currently they pollute the discretionary set with admin events.
 - LLM-judge fallback would have helped here: the rubric explicitly says "Karp identified as a primary contributor," which the criterion encodes literally. A judge call could note "Karp's trades were correctly filtered as plan-driven; the criterion is inconsistent with the locked 10b5-1 design" and return partial credit. (Phase 1 grader only falls back to judge when binary returns None, not when binary returns False — Phase 2 could broaden the trigger.)
 - Possibly revise eval event #6 in a Phase 2 pre-registration v2 (separate tag, separate `locked_at`) to test a different aspect of the correlator that doesn't conflict with locked design.
+
+### `key_10k_fy22` — PASS via binary (2026-05-12)
+
+**Result:** PASS (binary, no judge fallback).
+
+KEY FY2022 10-K (accession `0000091576-23-000026`, filed 2023-02-21) diff'd against FY2021 10-K (`0000091576-22-000029`). Stage 3 produced 100+ summaries; aggregate materiality_max = 0.9. `affected_topics` union included `interest_rates`, `deposits`, `liquidity`, `risk_management`, `loans`, `credit_losses`, `SOFR`, `cybersecurity`. The pass_criteria asked for any of `[available-for-sale, afs, deposits, deposit_composition, capital_ratio, unrealized_losses]` at materiality ≥ 0.6 — the system surfaced `deposits` cleanly.
+
+Classic regional-bank disclosure pivot after the 2022 rate spike (KEY's AFS unrealized losses + deposit-composition shift were front-page stories). The diff analyzer caught the broad theme without hand-tuning.
+
+### `cvna_10k_fy22` — PASS via binary (2026-05-12)
+
+**Result:** PASS (binary, no judge fallback).
+
+CVNA FY2022 10-K (`0001690820-23-000052`) vs FY2021 10-K (`0001690820-22-000080`). Aggregate materiality_max = 0.9. Topics surfaced included `liquidity`, `adesa_acquisition`, `cybersecurity`, `financing_activities`, `going_concern`, `debt_covenant`. The pass_criteria asked for any of `[liquidity, going_concern, substantial_doubt, debt_covenant, refinancing]` — three of the five matched.
+
+CVNA's liquidity stress was well-documented at the time; the diff analyzer surfaced exactly what an analyst would expect.
+
+### Phase 1 final scorecard (3 of 12 pre-registered events)
+
+```
+global:        2/3
+correlator     0/1   (pltr_karp_form4_2024 — documented miss)
+diff_analyzer  2/2   (key_10k_fy22, cvna_10k_fy22)
+```
+
+Total OpenAI spend for the 3-event scorecard: ~$1.27 (398 Stage 2 + 199 Stage 3 + 1 correlator calls). Run time: ~17 minutes wall-clock (TPM-throttled Stage 3 calls dominate). The remaining 9 events stay un-pre-registered until Phase 2.
