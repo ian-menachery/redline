@@ -406,15 +406,12 @@ def _render_hero(conn: sqlite3.Connection) -> None:
             "4. Joins Form 4 insider transactions to filing events on a ±14-day window, "
             "filtering 10b5-1 plan-driven trades.\n"
             "5. Surfaces flagged events here.\n\n"
-            "**Built as a resume artifact for Dec 2026 full-time recruiting.** "
-            "Design + locked decisions live in [`CLAUDE.md`](https://github.com/ian-menachery/redline/blob/master/CLAUDE.md) "
-            "and [`ARCHITECTURE.md`](https://github.com/ian-menachery/redline/blob/master/ARCHITECTURE.md). "
-            "An eval harness scores the system against pre-registered historical events — see the "
-            "[`eval-pre-registration-v1`](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1) tag.\n\n"
-            "**Eval scorecard:** 2/3 on the 3 pre-registered events. The one failure is itself "
-            "evidence the locked 10b5-1 filter is working — the criterion expected Karp's 2024 "
-            "sales to be flagged, but they're 100% plan-driven and the system correctly excluded "
-            "them. Full reasoning in [`NOTES.md §11`](https://github.com/ian-menachery/redline/blob/master/NOTES.md#11--eval-findings-phase-1)."
+            "**Accuracy.** The system has been measured against three historical filing events: "
+            "KeyCorp's FY2022 deposit-and-rate-environment disclosures, Carvana's FY2022 "
+            "liquidity stress, and Palantir's late-2024 insider-trading pattern. It correctly "
+            "surfaced the disclosure shifts at KeyCorp and Carvana. The Palantir case is "
+            "documented as a known limitation around how the system filters out scheduled "
+            "(10b5-1 plan-driven) trades — see the caveat note on that finding below."
         )
 
 
@@ -503,8 +500,7 @@ def _render_sidebar(conn: sqlite3.Connection) -> dict:
 
     st.sidebar.divider()
     st.sidebar.caption(
-        "[Repo on GitHub](https://github.com/ian-menachery/redline) · "
-        "[Pre-registration tag](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1)"
+        "[Source on GitHub](https://github.com/ian-menachery/redline)"
     )
 
     return {
@@ -572,13 +568,14 @@ def _render_finding_card(conn: sqlite3.Connection, event: dict) -> None:
             st.markdown(
                 '<div class="caveat-banner">'
                 "⚠ <strong>Known data-quality caveat.</strong> "
-                "This finding reflects a Phase 1 limitation: the Form 4 parser treats "
-                "issuer-name placeholders as if they were insiders. The signal you'd "
-                "actually want flagged here (Karp's November 2024 sales) is correctly "
-                "filtered by the system because those trades were 100% 10b5-1 plan-driven — "
-                "see the locked decision in CLAUDE.md §4.4 and the full pre-registration "
-                "story in "
-                '<a href="https://github.com/ian-menachery/redline/blob/master/NOTES.md#11--eval-findings-phase-1" target="_blank">NOTES.md §11</a>.'
+                "This finding reflects a limitation in how the system parses Form 4 "
+                "transaction records — issuer-name placeholders are occasionally "
+                "treated as if they were insiders. The signal worth flagging here "
+                "(Karp's November 2024 sales) is correctly excluded by the system, "
+                "because those sales were executed under a pre-arranged 10b5-1 trading "
+                "plan — by design, plan-driven trades aren't treated as "
+                "insider-information signals. "
+                '<a href="https://github.com/ian-menachery/redline/blob/master/NOTES.md#11--eval-findings-phase-1" target="_blank">Technical detail.</a>'
                 "</div>",
                 unsafe_allow_html=True,
             )
