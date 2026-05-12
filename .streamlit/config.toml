@@ -1,0 +1,13 @@
+# Streamlit theme and runtime config for redline.
+# Navy/charcoal accent on light-gray panel base — financial-tooling neutral.
+
+[theme]
+base = "light"
+primaryColor = "#1e3a5f"
+backgroundColor = "#fafbfc"
+secondaryBackgroundColor = "#eef1f5"
+textColor = "#1f2933"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false
