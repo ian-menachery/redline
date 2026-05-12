@@ -43,11 +43,10 @@ def connect(db_path: str | Path, *, read_only: bool = False) -> sqlite3.Connecti
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(
-        path,
-        isolation_level=None,        # autocommit; explicit BEGIN when needed
-        detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
-    )
+    # No detect_types: the default TIMESTAMP converter is deprecated in
+    # Python 3.12+ and chokes on ISO 8601 (`T` separator). We store
+    # timestamps as ISO 8601 strings and parse in application code when needed.
+    conn = sqlite3.connect(path, isolation_level=None)  # autocommit
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     if read_only:
