@@ -1,0 +1,38 @@
+# Runtime settings for redline. Loaded into `RedlineConfig` (Pydantic) via
+# `src/redline/config.py`. See ARCHITECTURE.md §13 for the configuration model
+# and CLAUDE.md §9 for LLM usage conventions.
+
+[llm]
+# Active provider on process start. Falls over to anthropic on
+# insufficient_quota — see ARCHITECTURE.md §9 (Provider Fallover).
+provider = "openai"
+
+[llm.openai]
+cheap_model   = "gpt-4o-mini"  # Stage 2 diff gate, etc.
+quality_model = "gpt-4o"       # Stage 3 summary, correlator, judge
+
+[llm.anthropic]
+cheap_model   = "claude-haiku-4-5"
+quality_model = "claude-sonnet-4-6"
+
+[diff]
+# Stage 1 thresholds. min_words=22 is the candidate from PLTR FY22-vs-FY23
+# evidence (NOTES.md §1); revisit after Phase 1 eval.
+min_words              = 22
+normalize_tokens       = true
+number_only_skip       = true
+materiality_threshold  = 0.6
+comparison_strategy    = "most_recent_same_type"
+
+[correlator]
+# ±14d join window between filing events and Form 4 transactions
+# (ARCHITECTURE.md §5).
+window_days = 14
+
+[poller]
+# 15-minute cadence (ARCHITECTURE.md §2). UA format per NOTES.md §4.
+cadence_seconds  = 900
+edgar_user_agent = "Redline (hatcher.ry@northeastern.edu)"
+
+[storage]
+db_path = "data/redline.db"

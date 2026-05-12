@@ -106,7 +106,7 @@ See `ARCHITECTURE.md` for the full system diagram, subsystem internals, SQLite s
 - **Python 3.11+** — modern type hints (`X | None`, `list[T]`); pattern matching available where it clarifies.
 - **SQLite** — single source of truth (state, content cache, transactions, diff results, flagged events, eval runs, LLM call log). One DB, no other persistence layers.
 - **`edgartools`** — EDGAR access. Quirks logged in `NOTES.md` §5.
-- **Anthropic SDK** — `claude-haiku-4-5` for bulk/cheap, `claude-sonnet-4-6` for quality, no Opus by default (cost discipline). See §9.
+- **LLM provider — provider-agnostic by design.** Phase 1 starts on OpenAI (`gpt-4o-mini` cheap-role + `gpt-4o` quality-role) to consume $4.98 of OpenAI credits, then falls over to Anthropic (`claude-haiku-4-5` + `claude-sonnet-4-6`) on `insufficient_quota` error. Selection logic in `src/redline/llm/client.py`; model mapping in `config/settings.toml`; rationale in `ARCHITECTURE.md` §9.
 - **Streamlit** — dashboard. Read-only DB connection to avoid lock contention with the poller.
 - **Pydantic v2 + `pydantic-settings`** — all config (watchlist, eval events, prompt templates) AND every LLM structured output. Validation is not optional.
 - **pytest** — tests for substantive code paths only (see §7).
@@ -151,25 +151,26 @@ Build the right engineering solution by default. The fact that this is a resume 
 
 ## §9 — LLM usage conventions
 
-This project uses LLMs at four points in the pipeline. Each point has a specific model assignment and a Pydantic-validated output schema.
+This project uses LLMs at four points in the pipeline. Each point has a **role** (cheap vs quality) and a Pydantic-validated output schema. The role-to-model mapping is provider-dependent and lives in `config/settings.toml`; see `ARCHITECTURE.md` §9 for the active model picks and Provider Fallover details.
 
-| Stage | Where | Model | Output schema (Pydantic) |
-|-------|-------|-------|--------------------------|
-| Diff gate | Stage 2 of diff filter | Haiku | `DiffGateDecision` |
-| Diff summary | Stage 3 of diff filter | Sonnet | `DiffSummary` |
-| Correlator reasoning | Anomaly verdict synthesis | Sonnet | `CorrelatorVerdict` |
-| Eval grading (fallback) | LLM-as-judge | Sonnet | `EvalJudgeVerdict` |
+| Call site | Where | Role | Output schema (Pydantic) |
+|---|---|---|---|
+| Diff gate | Stage 2 of diff filter | `cheap` | `DiffGateDecision` |
+| Diff summary | Stage 3 of diff filter | `quality` | `DiffSummary` |
+| Correlator verdict | Anomaly verdict synthesis | `quality` | `CorrelatorVerdict` |
+| Eval grading (fallback) | LLM-as-judge | `quality` | `EvalJudgeVerdict` |
 
 See `ARCHITECTURE.md` §9 for the schemas and `ARCHITECTURE.md` §10 (`llm_call_log` table) for the persistence shape.
 
 **Rules:**
 
-- **Every LLM call is logged to SQLite** (`llm_call_log`: model, prompt_version, tokens in/out, cost estimate, latency, call_site). No exceptions. Logging lives in the LLM client wrapper; bypassing it is a bug.
+- **Every LLM call is logged to SQLite** (`llm_call_log`: provider, model, prompt_version, tokens in/out, cost estimate, latency, call_site). No exceptions. Logging lives in the LLM client wrapper; bypassing it is a bug.
 - **Every output is Pydantic-validated.** A parse failure IS a call failure — retry once with the same prompt, then mark the filing's pipeline stage as `*_failed` (see `ARCHITECTURE.md` §7).
 - **Prompt templates are versioned.** Stored as `config/prompts/<name>_v<n>.txt`. Cache key includes prompt version. Bumping a version invalidates cache for that prompt.
-- **Caching is aggressive.** Cache key = `(prompt_version, model, content_hash)`. During dev iteration, this is what keeps cost under $50.
-- **Model selection:** Haiku for binary classification or extraction over many inputs; Sonnet for synthesis, reasoning, or judgment. Opus only with explicit motivation.
-- **Use Anthropic prompt caching** when the same large context (e.g. prior filing section) is reused across calls within a batch.
+- **Caching is aggressive.** Cache key = `(prompt_version, provider, model, content_hash)`. During dev iteration, this is what keeps cost manageable.
+- **Role selection:** `cheap` for binary classification or extraction over many inputs (Haiku-grade); `quality` for synthesis, reasoning, or judgment (Sonnet-grade). Frontier-tier (Opus / gpt-4-class) only with explicit motivation.
+- **Provider:** active by default per `config/settings.toml`. Phase 1 starts on OpenAI to consume $4.98 of credits, falls over to Anthropic on `insufficient_quota` error (see `ARCHITECTURE.md` §9 "Provider fallover").
+- **Use prompt caching** (Anthropic prompt caching API, OpenAI prompt-caching headers) when the same large context (e.g. prior filing section) is reused across calls within a batch.
 
 ## §10 — File / directory layout
 

@@ -252,14 +252,33 @@ Total latency target: < 2 min from EDGAR appearance to flagged event written. Do
 
 ## §9 — LLM call boundaries
 
-Four call sites, each with a single Pydantic schema (defined in `src/redline/llm/schemas.py`):
+Four call sites, each with a role (`cheap` or `quality`) and a single Pydantic schema (defined in `src/redline/llm/schemas.py`):
 
-| Call site | Model | Pydantic schema | Notes |
+| Call site | Role | Pydantic schema | Notes |
 |---|---|---|---|
-| Diff Stage 2 | Haiku | `DiffGateDecision` | One call per surviving Stage 1 chunk |
-| Diff Stage 3 | Sonnet | `DiffSummary` | One call per Stage 2 pass, full-section context |
-| Correlator | Sonnet | `CorrelatorVerdict` | One call per filing event (not per transaction) |
-| Eval judge | Sonnet | `EvalJudgeVerdict` | Fallback when binary `pass_criteria` doesn't apply or is contradicted |
+| Diff Stage 2 | `cheap` | `DiffGateDecision` | One call per surviving Stage 1 chunk |
+| Diff Stage 3 | `quality` | `DiffSummary` | One call per Stage 2 pass, full-section context |
+| Correlator | `quality` | `CorrelatorVerdict` | One call per filing event (not per transaction) |
+| Eval judge | `quality` | `EvalJudgeVerdict` | Fallback when binary `pass_criteria` doesn't apply or is contradicted |
+
+### Role → model mapping (set in `config/settings.toml`)
+
+| Role | OpenAI (default for Phase 1) | Anthropic (post-fallover) |
+|---|---|---|
+| `cheap` | `gpt-4o-mini` | `claude-haiku-4-5` |
+| `quality` | `gpt-4o` | `claude-sonnet-4-6` |
+
+### Provider fallover
+
+Phase 1 starts on OpenAI to consume Ian's $4.98 of OpenAI credits. The client (`src/redline/llm/client.py`) holds a process-level `_active_provider` flag. On any OpenAI call that raises `openai.RateLimitError` or `openai.BadRequestError` with an `insufficient_quota` / billing-error signature, the client:
+
+1. Logs a one-time "switching provider" warning + writes a `provider_switch` event to `llm_call_log`.
+2. Flips `_active_provider = "anthropic"` for the remainder of the process.
+3. Retries the failed call against Anthropic with the role-appropriate model.
+
+Subsequent calls in the same process skip OpenAI entirely. A fresh process restarts on OpenAI by default — if Ian's credits are still exhausted at that point, the first call falls over again immediately. This is cheap because the failure mode is a single fast API error, not retries with backoff.
+
+Cost tracking in `llm_call_log` continues regardless of provider; the `provider` column distinguishes which side incurred the spend. No running-total math gates the switch — we rely on the API's own quota signal.
 
 **Schema sketches:**
 
@@ -415,22 +434,23 @@ Separate from `eval_runs` to prevent fresh events from contaminating the graded 
 ```
 id              INTEGER PRIMARY KEY AUTOINCREMENT
 called_at       TIMESTAMP NOT NULL
-call_site       TEXT NOT NULL        -- diff_gate | diff_summary | correlator | eval_judge
-model           TEXT NOT NULL        -- 'claude-haiku-4-5' | 'claude-sonnet-4-6' | ...
+call_site       TEXT NOT NULL        -- diff_gate | diff_summary | correlator | eval_judge | provider_switch
+provider        TEXT NOT NULL        -- 'openai' | 'anthropic'
+model           TEXT NOT NULL        -- 'gpt-4o-mini' | 'gpt-4o' | 'claude-haiku-4-5' | 'claude-sonnet-4-6' | ...
 prompt_version  TEXT NOT NULL
 tokens_in       INTEGER NOT NULL
 tokens_out      INTEGER NOT NULL
 cost_usd        REAL NOT NULL
 latency_ms      INTEGER NOT NULL
 cache_hit       BOOLEAN NOT NULL
-status          TEXT NOT NULL        -- ok | parse_error | api_error | rate_limit
+status          TEXT NOT NULL        -- ok | parse_error | api_error | rate_limit | info
 error_reason    TEXT
 
 INDEX (called_at)
 INDEX (call_site, called_at)
 ```
 
-Cost discipline lives here. Weekly aggregation feeds `NOTES.md` §8.
+Cost discipline lives here. Weekly aggregation feeds `NOTES.md` §8. The `provider_switch` call_site is reserved for the OpenAI → Anthropic fallover event (zero tokens, zero cost, `status='info'`; `error_reason` records the triggering error).
 
 ## §11 — Eval harness
 

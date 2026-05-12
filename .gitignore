@@ -1,5 +1,5 @@
 # Data and secrets
-data/
+data/*
 !data/.gitkeep
 .env
 .env.local

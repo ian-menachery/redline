@@ -192,19 +192,30 @@ _(empty)_
 
 ## §8 — Cost tracking
 
-Weekly running total of LLM spend (from `llm_call_log` aggregation).
+**Starting balance (2026-05-11):** **$4.98 OpenAI credits** + $0 Anthropic. Phase 1 starts on OpenAI to consume the credits, then falls over to Anthropic on `insufficient_quota` per `ARCHITECTURE.md` §9 (Provider Fallover). The Phase 0.5 Stage-2 dry-run already spent ~$0.01, leaving roughly $4.97.
+
+Weekly running total of LLM spend (from `llm_call_log` aggregation), broken down by provider.
 
 Template per entry:
 
 ```
 ### Week of YYYY-MM-DD
-- Total: $X.XX
-- By model: Haiku $X.XX / Sonnet $X.XX
+- Total: $X.XX  (OpenAI $X.XX, Anthropic $X.XX)
+- By role: cheap $X.XX / quality $X.XX
 - By call site: diff_gate / diff_summary / correlator / eval_judge
-- Notable: <anomalies, e.g. "Sunday eval run cost $4 — investigate prompt-caching">
+- Notable: anomalies, e.g. "Sunday eval run cost $4 — investigate prompt-caching"
 ```
 
-Budget: $5–15 nominal MVP, $30–50 realistic with iteration. No hard cap, but anything over $10 in a single day warrants a check.
+Template per `provider_switch` event (logged to `llm_call_log` with `call_site='provider_switch'`):
+
+```
+### YYYY-MM-DD HH:MM — switched provider
+- Triggered by: <error class + message>
+- OpenAI spend at switch: $X.XX
+- Process restarted on OpenAI? <yes/no>
+```
+
+Budget: $5–15 nominal MVP, $30–50 realistic with iteration. No hard cap. The OpenAI credits provide a free runway; Anthropic spend after fallover is the real cost.
 
 _(empty)_
 
