@@ -252,9 +252,12 @@ Alternatives considered: a flat source layout (rejected — five subsystems will
 
 ## §11 — Current status
 
-- **Phase 0 (Planning):** COMPLETE. Eval set drafted with subsystem tags and pass criteria. Watchlist locked. Critical review pass done. Four planning docs written (this file is one of them).
-- **Phase 0.5 (Day 0 spike):** NEXT. See `ROADMAP.md` Phase 0.5.
-- **No code yet.** Do not write source code until Phase 0.5 hand-validation tasks are complete and the pre-registration artifact is committed.
+- **Phase 0 (Planning):** COMPLETE. Four planning docs written, watchlist locked, eval set drafted with subsystem tags and pass criteria.
+- **Phase 0.5 (Day 0 spike):** COMPLETE. `edgartools` verified across 10-Q / 10-K / 8-K / Form 4, Risk Factors stickiness validated by hand-diff, Form 4 distribution spike done, Stage 2 dry-run gated 85 chunks. Pre-registration tag `eval-pre-registration-v1` pushed.
+- **Phase 1 (MVP):** COMPLETE. All five subsystems shipped (poller, fetcher + parser, three-stage diff analyzer, correlator, Streamlit dashboard). LLM substrate is provider-agnostic with automatic Anthropic fallover. Replay + eval harness scored 2/3 on the 3 pre-registered events (KEY + CVNA PASS; PLTR Karp documented FAIL per §4.5). 112 tests passing. Total OpenAI spend: $1.27.
+- **Phase 2 (Hardening):** NEXT. See `ROADMAP.md` Phase 2.
+
+For ongoing changes, prefer editing existing subsystem code over adding new modules. New subsystems should follow the `run_once(config, conn, [client])` shape so they integrate cleanly with the eval harness.
 
 ## §12 — Maintenance of this file
 
