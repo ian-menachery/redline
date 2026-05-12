@@ -247,3 +247,29 @@ What would break this:
 - Running across multiple machines on a network mount (don't)
 
 If concurrency does become an issue, the failure mode is "database is locked" exceptions, not data corruption. Mitigation: retry-with-backoff in both processes.
+
+## §11 — Eval findings (Phase 1)
+
+Recorded as the eval harness runs uncover real signal vs. assumptions. Per `CLAUDE.md` §4.5 honesty rules: events stay locked, misses are documented here.
+
+### `pltr_karp_form4_2024` — pre-registration miss (2026-05-12)
+
+**Result:** FAIL (binary, no judge fallback).
+
+**Why:** the pass_criteria requires `'Karp' in correlator_payload.drivers`, but the correlator's verdict correctly named other PLTR insiders, not Karp. Investigation:
+
+- All 24 of Karp's Form 4 transactions in 2024-11-01:2024-12-31 carry `is_10b5_1=1` — the footnote regex hit on every one of them ("pursuant to a preexisting Rule 10b5-1 trading plan, entered into on December 12, 2023" pattern). Karp's Nov 2024 sales are 100% plan-driven.
+- The correlator filters 10b5-1 trades from the discretionary set per `CLAUDE.md` §4.4 (locked decision — the plan filter is non-optional). Karp's trades are correctly excluded.
+- The 6 trades that *did* survive the filter have `insider_name="Palantir Technologies Inc."` (the issuer itself, not a human) and prices of $0.10–$0.13/share — clearly admin entries or share-issuance records, not market sales. Form 4 parser limitation: it accepts issuer-name placeholders as "insiders." Phase 2 LLM extractor (`NOTES.md` §3.1) should normalize this.
+- The LLM verdict named "Palantir Technologies Inc. Oct 30 & Nov 4 sales" as drivers, with confidence=0.7 — anomalous=True. But "Karp" isn't in the drivers string.
+
+**What this means:**
+
+The eval criterion was written under the assumption that Karp's Nov 2024 selling around the AIP launch would be flagged. That assumption was wrong — the trades were plan-driven, and the locked 10b5-1 filter correctly excludes them. The system did exactly what its design says.
+
+Per `CLAUDE.md` §4.5: this event stays at FAIL in the scorecard. The README will explain: "8/12 and here's what the 4 misses taught me" is a stronger story than swapping the criterion to make it pass.
+
+**Phase 2 follow-ups identified by this miss:**
+- Form 4 parser: filter out issuer-name placeholders from `insider_name` (or distinguish in a separate column). Currently they pollute the discretionary set with admin events.
+- LLM-judge fallback would have helped here: the rubric explicitly says "Karp identified as a primary contributor," which the criterion encodes literally. A judge call could note "Karp's trades were correctly filtered as plan-driven; the criterion is inconsistent with the locked 10b5-1 design" and return partial credit. (Phase 1 grader only falls back to judge when binary returns None, not when binary returns False — Phase 2 could broaden the trigger.)
+- Possibly revise eval event #6 in a Phase 2 pre-registration v2 (separate tag, separate `locked_at`) to test a different aspect of the correlator that doesn't conflict with locked design.

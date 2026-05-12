@@ -138,6 +138,22 @@ CREATE TABLE IF NOT EXISTS correlator_runs (
 );
 """
 
+# Eval harness scorecard (ARCHITECTURE.md §10).
+EVAL_RUNS_DDL = """
+CREATE TABLE IF NOT EXISTS eval_runs (
+    id                  TEXT PRIMARY KEY,
+    event_id            TEXT NOT NULL,
+    ran_at              TIMESTAMP NOT NULL,
+    prompt_versions     TEXT,
+    binary_result       INTEGER,
+    judge_result        TEXT,
+    graded_pass         INTEGER NOT NULL,
+    subsystems_tested   TEXT,
+    notes               TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_eval_runs_event_id ON eval_runs (event_id, ran_at);
+"""
+
 
 def init_full_schema(conn: sqlite3.Connection) -> None:
     """Idempotently create every table any subsystem in redline currently uses.
@@ -154,6 +170,7 @@ def init_full_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(DIFF_RESULTS_DDL)
     conn.executescript(FLAGGED_EVENTS_DDL)
     conn.executescript(CORRELATOR_RUNS_DDL)
+    conn.executescript(EVAL_RUNS_DDL)
 
 
 def seed_watchlist_from_yaml(conn: sqlite3.Connection, path: str | Path) -> int:
