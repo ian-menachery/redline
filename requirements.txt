@@ -1,6 +1,12 @@
 # Spike-phase dependencies (Phase 0.5).
 # Graduate to pyproject.toml at Phase 1 start.
 
+# Install the local redline package itself (src-layout). Streamlit Cloud
+# runs `pip install -r requirements.txt` and would otherwise fail at
+# `from redline.config import RedlineConfig` because the src/ layout
+# means `redline` isn't importable until pip-installed.
+-e .
+
 edgartools>=3.0
 pydantic>=2.0
 pyyaml>=6.0
