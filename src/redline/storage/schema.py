@@ -86,6 +86,44 @@ CREATE INDEX IF NOT EXISTS idx_form4_tx_insider_date
     ON form4_transactions (insider_name, trade_date);
 """
 
+# Subsystem 3 (diff analyzer) owns these.
+DIFF_RESULTS_DDL = """
+CREATE TABLE IF NOT EXISTS diff_results (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    accession        TEXT NOT NULL REFERENCES filings_seen(accession),
+    prior_accession  TEXT NOT NULL REFERENCES filings_seen(accession),
+    section          TEXT NOT NULL,
+    stage            INTEGER NOT NULL,
+    chunk_old        TEXT,
+    chunk_new        TEXT,
+    gate_decision    TEXT,
+    summary          TEXT,
+    materiality      REAL,
+    prompt_version   TEXT NOT NULL,
+    created_at       TIMESTAMP NOT NULL,
+    eval_run_id      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_diff_results_acc_sec_stg
+    ON diff_results (accession, section, stage);
+"""
+
+FLAGGED_EVENTS_DDL = """
+CREATE TABLE IF NOT EXISTS flagged_events (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    accession          TEXT NOT NULL REFERENCES filings_seen(accession),
+    flag_reason        TEXT NOT NULL,
+    diff_summary       TEXT,
+    correlator_payload TEXT,
+    materiality_max    REAL,
+    flagged_at         TIMESTAMP NOT NULL,
+    eval_run_id        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_flagged_events_flagged_at
+    ON flagged_events (flagged_at);
+CREATE INDEX IF NOT EXISTS idx_flagged_events_accession
+    ON flagged_events (accession);
+"""
+
 
 def init_full_schema(conn: sqlite3.Connection) -> None:
     """Idempotently create every table any subsystem in redline currently uses.
@@ -99,6 +137,8 @@ def init_full_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(FILINGS_SEEN_DDL)
     conn.executescript(FILINGS_CONTENT_DDL)
     conn.executescript(FORM4_TRANSACTIONS_DDL)
+    conn.executescript(DIFF_RESULTS_DDL)
+    conn.executescript(FLAGGED_EVENTS_DDL)
 
 
 def seed_watchlist_from_yaml(conn: sqlite3.Connection, path: str | Path) -> int:

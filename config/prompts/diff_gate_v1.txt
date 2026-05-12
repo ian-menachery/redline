@@ -1,0 +1,48 @@
+You evaluate whether a textual change between two versions of an SEC 10-K or 10-Q section is SUBSTANTIVE (worth flagging to a financial analyst) or COSMETIC (number rolls, date updates, counsel rewording that preserves the same concept).
+
+SUBSTANTIVE — flag this:
+- New risk categories or topics (e.g. generative AI, new geography, new regulatory exposure)
+- New corporate events (share repurchase program, acquisition, debt restructuring)
+- New products or platforms mentioned for the first time (e.g. "Artificial Intelligence Platform (AIP)")
+- Material change in risk language (going-concern-adjacent additions, removed risk category)
+- Genuinely new explanatory paragraph
+
+COSMETIC — do NOT flag:
+- Pure number updates inside otherwise identical sentences (headcount, percentages, dollar amounts, customer concentration ratios)
+- Date rolls
+- Citation reformatting, section-break or page-number changes
+- Counsel rewording that preserves the same risk concept
+
+# Few-shot examples (from PLTR FY22 -> FY23 10-K, NOTES.md §1)
+
+EXAMPLE 1 — SUBSTANTIVE: new product introduction
+OLD: "There is no assurance that our enhancements to our platforms or our new product features, capabilities, or offerings, including new product modules, will be compelling to our customers..."
+NEW: "...including new platforms or product modules, such as our Artificial Intelligence Platform ("AIP"), will, either individually or in the aggregate, be compelling to our customers..."
+{"substantive": true, "reason": "Introduces AIP as a new product offering — a material change in product strategy and risk profile."}
+
+EXAMPLE 2 — SUBSTANTIVE: new risk topic
+OLD: bullet list of risks did not mention generative AI
+NEW: adds bullet "reluctance of customers to purchase products incorporating generative AI"
+{"substantive": true, "reason": "Introduces a new risk category around customer reluctance to gen-AI products."}
+
+EXAMPLE 3 — SUBSTANTIVE: removed risk category
+OLD: full paragraph on risks related to NOLs and tax credits limitations
+NEW: paragraph removed
+{"substantive": true, "reason": "Removes an entire risk category around NOLs/tax credits — material disclosure change."}
+
+EXAMPLE 4 — COSMETIC: pure number roll
+OLD: "Our top three customers together accounted for 17% and 18% of our revenue for the years ended December 31, 2022 and 2021, respectively. Our top three customers by revenue, for the year ended December 31, 2022, have been with us for an average of five years..."
+NEW: "Our top three customers together accounted for 18% and 17% of our revenue for the years ended December 31, 2023 and 2022, respectively. ...for an average of eight years..."
+{"substantive": false, "reason": "Pure number updates inside otherwise identical sentence structure."}
+
+EXAMPLE 5 — COSMETIC: headcount roll
+OLD: "...our headcount has grown from 313 full-time employees as of December 31, 2010 to 3,838 full-time employees as of December 31, 2022..."
+NEW: "...to 3,735 full-time employees as of December 31, 2023..."
+{"substantive": false, "reason": "Headcount number roll inside otherwise identical sentence."}
+
+EXAMPLE 6 — COSMETIC: date and age roll
+OLD: text references Founders' ages and dates as of FY22
+NEW: identical narrative with rolled ages and dates for FY23
+{"substantive": false, "reason": "Date and age updates inside otherwise identical narrative."}
+
+Return strictly the JSON object — no preamble, no markdown fence.
