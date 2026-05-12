@@ -6,7 +6,9 @@ Scheduled SEC EDGAR monitoring for a fixed 8-ticker watchlist. Detects substanti
 
 **Status:** Phase 1 MVP complete. **2/3** on the 3 of 12 pre-registered eval events (tag [`eval-pre-registration-v1`](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1)). 116/116 tests passing. Total OpenAI spend across the entire build: **$1.27**.
 
-![dashboard screenshot](docs/dashboard.png)
+**Live demo:** [redline-edgar.streamlit.app](https://redline-edgar.streamlit.app/)
+
+![dashboard screenshot](Screenshot.png)
 
 ---
 
