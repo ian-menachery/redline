@@ -7,6 +7,7 @@ pyyaml>=6.0
 anthropic>=0.40
 python-dotenv>=1.0
 pytest>=8.0
+streamlit>=1.30
 
 # OpenAI client — Phase 1 starts on OpenAI (gpt-4o-mini + gpt-4o) to consume
 # Ian's $4.98 of OpenAI credits, then falls over to Anthropic on
