@@ -124,6 +124,20 @@ CREATE INDEX IF NOT EXISTS idx_flagged_events_accession
     ON flagged_events (accession);
 """
 
+# Subsystem 4 (correlator) tracks completion here. A row in this table
+# means "the correlator has run against this filing exactly once." Avoids
+# overloading the filings_seen.status enum with subsystem-completion bits.
+CORRELATOR_RUNS_DDL = """
+CREATE TABLE IF NOT EXISTS correlator_runs (
+    accession            TEXT PRIMARY KEY REFERENCES filings_seen(accession),
+    ran_at               TIMESTAMP NOT NULL,
+    trades_in_window     INTEGER NOT NULL,
+    discretionary_count  INTEGER NOT NULL,
+    anomalous            INTEGER,
+    confidence           REAL
+);
+"""
+
 
 def init_full_schema(conn: sqlite3.Connection) -> None:
     """Idempotently create every table any subsystem in redline currently uses.
@@ -139,6 +153,7 @@ def init_full_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(FORM4_TRANSACTIONS_DDL)
     conn.executescript(DIFF_RESULTS_DDL)
     conn.executescript(FLAGGED_EVENTS_DDL)
+    conn.executescript(CORRELATOR_RUNS_DDL)
 
 
 def seed_watchlist_from_yaml(conn: sqlite3.Connection, path: str | Path) -> int:
