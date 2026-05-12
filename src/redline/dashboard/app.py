@@ -28,7 +28,12 @@ from redline.storage.db import connect
 @st.cache_resource
 def _conn() -> sqlite3.Connection:
     config = RedlineConfig.from_toml("config/settings.toml")
-    return connect(config.storage.db_path, read_only=True)
+    # Streamlit's rerun model can dispatch on different threads; the cached
+    # connection has to opt out of single-thread checking. Safe because the
+    # dashboard is read-only (PRAGMA query_only=ON enforces it at SQLite).
+    return connect(
+        config.storage.db_path, read_only=True, check_same_thread=False,
+    )
 
 
 # ---------------------------------------------------------------------------

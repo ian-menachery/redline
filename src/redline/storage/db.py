@@ -34,11 +34,16 @@ CREATE INDEX IF NOT EXISTS idx_llm_call_log_call_site
 """
 
 
-def connect(db_path: str | Path, *, read_only: bool = False) -> sqlite3.Connection:
+def connect(
+    db_path: str | Path, *, read_only: bool = False,
+    check_same_thread: bool = True,
+) -> sqlite3.Connection:
     """Open a SQLite connection in WAL mode.
 
     Set ``read_only=True`` for the Streamlit dashboard's connection so any
     accidental write attempt fails fast instead of contending with the poller.
+    Pass ``check_same_thread=False`` when the connection will be shared
+    across threads (Streamlit's rerun model). Safe for read-only paths.
     """
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -46,7 +51,10 @@ def connect(db_path: str | Path, *, read_only: bool = False) -> sqlite3.Connecti
     # No detect_types: the default TIMESTAMP converter is deprecated in
     # Python 3.12+ and chokes on ISO 8601 (`T` separator). We store
     # timestamps as ISO 8601 strings and parse in application code when needed.
-    conn = sqlite3.connect(path, isolation_level=None)  # autocommit
+    conn = sqlite3.connect(
+        path, isolation_level=None,  # autocommit
+        check_same_thread=check_same_thread,
+    )
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     if read_only:
