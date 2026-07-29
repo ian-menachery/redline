@@ -252,13 +252,14 @@ Total latency target: < 2 min from EDGAR appearance to flagged event written. Do
 
 ## §9 — LLM call boundaries
 
-Four call sites, each with a role (`cheap` or `quality`) and a single Pydantic schema (defined in `src/redline/llm/schemas.py`):
+Five call sites, each with a role (`cheap` or `quality`) and a single Pydantic schema (defined in `src/redline/llm/schemas.py`):
 
 | Call site | Role | Pydantic schema | Notes |
 |---|---|---|---|
 | Diff Stage 2 | `cheap` | `DiffGateDecision` | One call per surviving Stage 1 chunk |
 | Diff Stage 3 | `quality` | `DiffSummary` | One call per Stage 2 pass, full-section context |
 | Correlator | `quality` | `CorrelatorVerdict` | One call per filing event (not per transaction) |
+| Guidance extraction | `quality` | `GuidanceExtraction` | Valuation subsystem 7: one call per item-2.02 8-K EX-99.1 earnings exhibit; typed forward-guidance figures, confidence-gated |
 | Eval judge | `quality` | `EvalJudgeVerdict` | Fallback when binary `pass_criteria` doesn't apply or is contradicted |
 
 ### Role → model mapping (set in `config/settings.toml`)
@@ -434,7 +435,7 @@ Separate from `eval_runs` to prevent fresh events from contaminating the graded 
 ```
 id              INTEGER PRIMARY KEY AUTOINCREMENT
 called_at       TIMESTAMP NOT NULL
-call_site       TEXT NOT NULL        -- diff_gate | diff_summary | correlator | eval_judge | provider_switch
+call_site       TEXT NOT NULL        -- diff_gate | diff_summary | correlator | guidance_extract | eval_judge | provider_switch
 provider        TEXT NOT NULL        -- 'openai' | 'anthropic'
 model           TEXT NOT NULL        -- 'gpt-4o-mini' | 'gpt-4o' | 'claude-haiku-4-5' | 'claude-sonnet-4-6' | ...
 prompt_version  TEXT NOT NULL
@@ -454,15 +455,19 @@ Cost discipline lives here. Weekly aggregation feeds `NOTES.md` §8. The `provid
 
 ### DCF valuation tables (Subsystem 7, added 2026-07-27)
 
-Built for the event-driven revaluation layer (`src/redline/valuation/`, NOTES §6). No LLM calls — purely XBRL-driven.
+Built for the event-driven revaluation layer (`src/redline/valuation/`, NOTES §6/§7/§12). The XBRL/DCF core is purely numeric; the **guidance hook** adds one quality-role LLM call site (`guidance_extract`, §9) that types forward guidance out of 8-K EX-99.1 exhibits.
 
 `xbrl_facts` — companyfacts ingestion sink, one row per (concept, period). `UNIQUE (cik, concept, fiscal_year, fiscal_period, period_start, period_end)` makes re-ingest idempotent (upsert refreshes the latest reported value). NOTE: the SEC `fiscal_year` column is the *filing's* year and bundles prior-year comparatives; annual values are resolved by `period_end` year + full-year span (see `fcf._annual_series_from_db`), not by that column.
 
 `dcf_valuations` — **append-only** valuation history (the deliberate break from latest-state storage; enables before/after). Columns: `id, cik, run_reason, trigger_accession, wacc, terminal_growth, assumptions_json, per_share_{bear,base,bull}, sensitivity_json, reference_price, reference_price_asof, model_version, valued_at, eval_run_id`. "Before" = prior row for the cik; "after" = the new row.
 
-`valuation_input_links` — audit trail: `valuation_id, input_name, old_value, new_value, source`. Records which real number moved which input on a new-filing revaluation.
+`valuation_input_links` — audit trail: `valuation_id, input_name, old_value, new_value, source`. Records which real number moved which input on a new-filing or guidance revaluation.
 
-FCF-base validation eval writes to `eval_runs` under the `fcf_validation:<ticker>` event namespace — deliberately separate from the locked graded-12 (§4.5).
+`extracted_figures` — typed forward-guidance figures pulled from 8-K EX-99.1 exhibits by the `guidance_extract` LLM call site. Carries `metric, scope` (total|segment), `period, low, high, unit, basis, confidence`, a confidence-gated `review_status` (`trigger_eligible`/`manual_review`), and a period-over-period `delta_direction` (raised/lowered/reaffirmed/initiated). `UNIQUE (accession, metric, scope, period, basis)`. Only a `scope=total`, annual, `trigger_eligible` revenue figure may drive a revaluation (the selector guard).
+
+`guidance_runs` — marker table recording which 8-K accessions the guidance extractor has already processed (so re-runs skip them); pairs with `extracted_figures` to make the sweep idempotent.
+
+FCF-base validation eval writes to `eval_runs` under the `fcf_validation:<ticker>` event namespace — deliberately separate from the locked graded-12 (§4.5). Guidance extraction accuracy is measured by a separate precision/recall grader (`guidance_eval.py`) against `config/valuation/guidance_labels.yaml`, also outside the graded-12.
 
 ## §11 — Eval harness
 

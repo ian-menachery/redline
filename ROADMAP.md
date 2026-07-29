@@ -67,20 +67,24 @@ Goal: ship polish that makes the project defensible in extended interview conver
 - **Better section parsing for edge cases.** Empty Legal Proceedings ("see prior 10-K"), S-1-style risk-factor tables, 8-Ks with malformed item headers.
 - **Backoff / retry tuning on EDGAR errors.** Use 24h+ of live operation data to calibrate retry delays.
 - **Email / push alerts for high-priority flags.** Provider TBD. `notifier` interface scaffolded per `ARCHITECTURE.md` §6.
-- **Hosting (if earned).** VPS + Turso, or Streamlit Cloud + GH Actions cron. "Earned" = local has been working reliably for 2+ weeks and there's a concrete reason to host (e.g. demoing to an interviewer's screen).
+- **Hosting — DONE (Streamlit Community Cloud).** Both dashboards are hosted: the disclosure monitor (`redline-edgar.streamlit.app`) and the DCF valuation dashboard (`redline-valuations.streamlit.app`, public-visibility toggle pending — see the Subsystem 7 section below). Read-only against committed curated snapshots; no cron/VPS. A VPS + scheduled-poller upgrade remains a future option, not a need.
 - **Live operation log infrastructure.** `live_operation_log` table populated automatically; dashboard surface for "recent activity," separate from eval.
 - **Form 144 ingestion.** Second correlator signal — proposed open-market sales by affiliates. Adds context for distinguishing 10b5-1 from discretionary.
 - **Anomaly-score weight tuning.** Use Phase 1 eval results to set non-trivial weights on the three signals. Document the tuning process (cross-validation? eyeball calibration? both?) in `NOTES.md`.
 
-## DCF valuation layer (Subsystem 7) — BUILT 2026-07-27
+## DCF valuation layer (Subsystem 7) — SHIPPED & CLOSED OUT 2026-07-29
 
-Event-driven revaluation from XBRL financials (NOT sentiment, NOT alpha — see `CLAUDE.md` §4). Shipped: XBRL companyfacts ingestion, a range-based DCF engine (bear/base/bull + sensitivity), an immutable before/after revaluation hook triggered by new periodic filings, a mandatory FCF-base validation eval, and a dashboard section. Covers the 6 non-financials (banks excluded). See `NOTES.md` §6 and `CLAUDE.md` §11.
+Event-driven revaluation from XBRL financials (NOT sentiment, NOT alpha — see `CLAUDE.md` §4). Shipped: XBRL companyfacts ingestion, a range-based DCF engine (bear/base/bull + sensitivity), an immutable before/after revaluation hook, a mandatory FCF-base validation eval, the 8-K guidance extraction hook, and a hosted recruiter dashboard. Covers the 6 non-financials (banks excluded); only VRTX + ULTA are presented as DCF-valued. See `NOTES.md` §12 (final state + limitations), §6/§7, and `CLAUDE.md` §11.
 
-**Follow-ups (deferred, each needs its own feasibility gate before building):**
-- **8-K earnings-exhibit guidance extraction.** The real "flagged change → model input" hook. Phase 0 verified guidance is NOT in MD&A (it's in Ex-99.1 press releases). Requires new 8-K exhibit parsing + a typed-figure extractor + its own extraction-accuracy eval. Do not start without confirming guidance is reliably extractable.
-- **Verify assumption constants.** Replace placeholder WACC / terminal growth / manual reference prices in `config/valuation/assumptions.yaml` (currently `is_placeholder: true`).
+**Done since the initial build:**
+- **8-K earnings-exhibit guidance extraction — DONE.** Feasibility gate passed (guidance is in Ex-99.1, not MD&A); typed extractor ran live on `claude-sonnet-4-6`; extraction-accuracy eval produced a real number (precision 0.875 vs the 0.90 bar — the residual FPs are correctly-classified segment figures against a totals-only gold; see `NOTES.md` §12).
+- **Assumption constants verified — DONE.** WACC / terminal growth / manual reference prices transcribed from sourced values; all six `is_placeholder: false`.
+- **Hosted dashboard — SHIPPED.** `dashboard/valuation_app.py` deployed to Streamlit Community Cloud (`redline-valuations.streamlit.app`), read-only against a committed curated snapshot, no key/secret. ⚠ Public-visibility toggle pending (currently Private — see `NOTES.md` §12 limitation 7).
+
+**Still deferred (each needs its own feasibility gate before building):**
 - **Bank valuation model.** SCHW/KEY need a financials-appropriate model (dividend-discount / residual-income / P-TBV) if they're to be valued at all.
-- **Reconsider MRNA.** Declining revenue + negative FCF make its DCF speculative; candidate for exclusion.
+- **Growth-name valuation.** NET/PLTR/MRNA don't reconcile under FCF-DCF; a multiples-based or reverse-DCF approach would be needed to value rather than merely monitor them.
+- **Guidance precision to 0.90.** Segment-labeled gold or scope=total-only precision measurement (see `NOTES.md` §12 limitation 1).
 
 ## Phase 3 — Stretch (optional, post-recruiting)
 
