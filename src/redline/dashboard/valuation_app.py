@@ -22,7 +22,6 @@ import sqlite3
 
 import streamlit as st
 
-from redline.config import ValuationConfig
 from redline.storage.db import connect
 
 # Names the DCF is credible for vs. monitored-only. Fixed here (presentation
@@ -30,9 +29,10 @@ from redline.storage.db import connect
 VALUED = ["VRTX", "ULTA"]
 MONITORED = ["NET", "PLTR", "MRNA"]
 MECHANISM_TICKER = "NET"  # the guidance before/after "mechanism demo" name
-# Reuse the same staleness window the valuation engine ships with (read the
-# Pydantic default — no TOML/secret dependency for this read-only app).
-STALE_DAYS = ValuationConfig().reference_price_stale_days
+# Named module constant, NOT config-model attribute access at import time: this
+# read-only app runs on Streamlit Cloud (cached venv), where reaching into a
+# freshly-added config field can crash on a stale install. Mirrors the default.
+STALE_DAYS = 120  # mirrors ValuationConfig.reference_price_stale_days
 DEFAULT_DB = "data/valuation_demo.db"
 
 

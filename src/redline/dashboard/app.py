@@ -18,15 +18,18 @@ from pathlib import Path
 
 import streamlit as st
 
-from redline.config import CorrelatorConfig, DiffConfig, RedlineConfig
+from redline.config import RedlineConfig
 from redline.storage.db import connect
 
-# Presentation constants, sourced from the config defaults so the dashboard
-# tracks the same thresholds/windows the pipeline uses (no bare literals).
-_SEVERITY_MAJOR = DiffConfig().severity_high            # >= this -> "Major"
-_SEVERITY_NOTABLE = DiffConfig().materiality_threshold  # >= this -> "Notable"
-_FORM4_WINDOW_DAYS = CorrelatorConfig().window_days     # ±N-day Form 4 window
-_EVENT_LIMIT = 50                                       # findings shown in the list
+# Presentation constants for the read-only dashboard. Kept as named module
+# constants (NOT config-model attribute access at import time): Streamlit Cloud
+# runs only the dashboards and caches its venv, so reaching into freshly-added
+# config fields here can crash the app on a stale install. These mirror the
+# pipeline config defaults; the pipeline itself (run locally) reads config.
+_SEVERITY_MAJOR = 0.8    # mirrors DiffConfig.severity_high -> "Major"
+_SEVERITY_NOTABLE = 0.6  # mirrors DiffConfig.materiality_threshold -> "Notable"
+_FORM4_WINDOW_DAYS = 14  # mirrors CorrelatorConfig.window_days (±N-day Form 4 window)
+_EVENT_LIMIT = 50        # findings shown in the list
 
 
 # ---------------------------------------------------------------------------

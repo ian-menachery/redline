@@ -347,3 +347,15 @@ The valuation subsystem is code-complete and closed out. This section is the as-
 5. **`revalue` is not point-in-time** — it always builds the base from the *latest* companyfacts, so re-running periodic filings does not produce an input-change pair; the only genuine before/after pair is the guidance-triggered one (NET).
 6. **NET mechanism tile copy (RESOLVED 2026-07-29).** The tile previously rendered a standalone dollar value ("Modeled base (before → after)", ~$11.97) that a skimmer could misread as a NET price target. Fixed: the tile now shows the *relative effect on the estimate* (e.g. +0.9%) under "Effect on the modeled estimate" — no absolute NET dollar figure is displayed anywhere, so the misread is structurally impossible while the "a filing moved the model" mechanism is preserved.
 7. **Hosted valuation dashboard — LIVE (2026-07-29).** Deployed to Streamlit Community Cloud at `redline-valuations.streamlit.app`, **public**, and confirmed to render for a logged-out visitor (incognito). Read-only against the committed `data/valuation_demo.db`; no key/secret (and specifically no `REDLINE_DB_PATH` secret, which would mis-point it at the disclosure DB).
+
+**Deployment gotcha (learned 2026-07-29, cost the `redline-edgar` app an outage).**
+Streamlit Community Cloud runs **only the read-only dashboards** and caches its
+venv — it does not reliably reinstall the `redline` package on a source-only push.
+So a dashboard that reads a **newly-added** config-model field at import time can
+crash on a stale env with `AttributeError` (the field exists in the repo but not
+in the installed package). Rule: **dashboard presentation constants are named
+module constants, never `SomeConfig().new_field` at import time.** The pipeline
+(poller/fetcher/diff/correlator/valuation), which legitimately consumes config,
+runs **locally** — Cloud never needs those fields. `tests/test_dashboard_import.py`
+imports both dashboards so a load-time crash fails CI (dashboards are otherwise
+untested per §7, which is how this shipped green at 199 passing).
