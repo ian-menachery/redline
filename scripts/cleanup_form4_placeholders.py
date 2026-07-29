@@ -9,12 +9,21 @@ from them; status on the affected `filings_seen` rows is reset to
 """
 from __future__ import annotations
 
+import argparse
+
 from redline.config import RedlineConfig
 from redline.fetcher import _is_issuer_placeholder
 from redline.storage.db import connect
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Report what would change and roll back without committing.",
+    )
+    args = parser.parse_args(argv)
+
     cfg = RedlineConfig.from_toml("config/settings.toml")
     conn = connect(cfg.storage.db_path)
     conn.execute("BEGIN")
@@ -70,6 +79,13 @@ def main() -> None:
         """,
         affected_ciks,
     )
+
+    if args.dry_run:
+        conn.execute("ROLLBACK")
+        print(f"[dry-run] would delete {len(spurious)} placeholder rows across "
+              f"{len(affected_accessions)} accessions and reset correlator state "
+              f"for ciks: {affected_ciks}. No changes committed.")
+        return
 
     conn.execute("COMMIT")
     print(f"Deleted {len(spurious)} placeholder rows across "

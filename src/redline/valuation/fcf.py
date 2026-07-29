@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import datetime
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 
 import yaml
@@ -54,7 +55,8 @@ def load_fcf_mapping(path: str | Path) -> dict[str, list[str]]:
 
 
 def build_base_from_edgar(
-    ticker: str, cik: str, *, company_factory, mapping: dict[str, list[str]],
+    ticker: str, cik: str, *, company_factory: Callable[[str], object],
+    mapping: dict[str, list[str]],
 ) -> XbrlBase:
     """Build the DCF base from edgartools canonical accessors.
 
@@ -285,6 +287,10 @@ def validate_base(
         passed = rel_error <= tolerance
         if not passed:
             notes.append(f"accessor FCF off known by {rel_error:.1%} (> {tolerance:.0%})")
+    elif known_fcf == 0:
+        # A relative-error check is undefined against a zero reference; surface
+        # why validation didn't pass rather than a bare passed=False.
+        notes.append("known_fcf is 0 — relative error undefined; cannot validate")
     return ValidationResult(
         ticker=base.ticker, accessor_fcf=accessor_fcf,
         reconstructed_fcf=reconstructed_fcf, known_fcf=known_fcf,

@@ -37,8 +37,8 @@ from redline.config import RedlineConfig
 _LOG = logging.getLogger(__name__)
 
 PARSER_VERSION = "v1"
-MAX_RETRIES = 3
-RETRY_AFTER_HOURS = 1
+# Retry policy lives in PollerConfig (max_retries / retry_after_hours) — one
+# source shared by the fetcher and the diff analyzer (ARCHITECTURE.md §7).
 
 # (label, part, item) per ARCHITECTURE.md §3. Patterns confirmed by spike.
 SECTION_SPEC_10K: list[tuple[str, str, str]] = [
@@ -379,9 +379,10 @@ def _mark_parsed(conn: sqlite3.Connection, accession: str) -> None:
 
 def _mark_failed(
     conn: sqlite3.Connection, *, accession: str, retry_count: int, reason: str,
+    max_retries: int,
 ) -> None:
     new_count = retry_count + 1
-    new_status = "failed_permanent" if new_count >= MAX_RETRIES else "parse_failed"
+    new_status = "failed_permanent" if new_count >= max_retries else "parse_failed"
     conn.execute(
         """
         UPDATE filings_seen SET
@@ -399,12 +400,15 @@ def _mark_failed(
 # Core
 # ---------------------------------------------------------------------------
 
-def _pending_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+def _pending_rows(
+    conn: sqlite3.Connection, *, max_retries: int, retry_after_hours: int,
+) -> list[sqlite3.Row]:
     """Rows eligible for fetch + parse.
 
     Picks up status='fetched' immediately. parse_failed rows are eligible
-    only when retry_count < MAX_RETRIES and last_attempted is older than
-    RETRY_AFTER_HOURS, matching the retry semantics in ARCHITECTURE.md §7.
+    only when retry_count < max_retries and last_attempted is older than
+    retry_after_hours, matching the retry semantics in ARCHITECTURE.md §7.
+    (Both ints are trusted config values, not user input — safe to interpolate.)
     """
     return conn.execute(
         f"""
@@ -414,10 +418,10 @@ def _pending_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
             status = 'fetched'
             OR (
                 status = 'parse_failed'
-                AND retry_count < {MAX_RETRIES}
+                AND retry_count < {int(max_retries)}
                 AND (
                     last_attempted IS NULL
-                    OR datetime(last_attempted) < datetime('now', '-{RETRY_AFTER_HOURS} hour')
+                    OR datetime(last_attempted) < datetime('now', '-{int(retry_after_hours)} hour')
                 )
             )
         """,
@@ -456,8 +460,12 @@ def run_once(config: RedlineConfig, conn: sqlite3.Connection) -> dict:
     Returns a summary dict for logging.
     """
     edgar.set_identity(config.poller.edgar_user_agent)
+    max_retries = config.poller.max_retries
+    retry_after_hours = config.poller.retry_after_hours
 
-    rows = _pending_rows(conn)
+    rows = _pending_rows(
+        conn, max_retries=max_retries, retry_after_hours=retry_after_hours,
+    )
     parsed = 0
     failed = 0
     permanent_failures = 0
@@ -498,10 +506,10 @@ def run_once(config: RedlineConfig, conn: sqlite3.Connection) -> dict:
             _LOG.warning("Parse failure for %s (%s): %s", accession, filing_type, reason)
             _mark_failed(
                 conn, accession=accession,
-                retry_count=retry_count, reason=reason,
+                retry_count=retry_count, reason=reason, max_retries=max_retries,
             )
             failed += 1
-            if retry_count + 1 >= MAX_RETRIES:
+            if retry_count + 1 >= max_retries:
                 permanent_failures += 1
             per_filing.append({
                 "accession": accession, "filing_type": filing_type,

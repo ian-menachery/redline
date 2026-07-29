@@ -423,3 +423,30 @@ def test_llm_exception_recorded_as_failure(db):
     assert db.execute(
         "SELECT COUNT(*) FROM flagged_events WHERE accession = ?", ("acc-10q",)
     ).fetchone()[0] == 0
+
+
+def test_llm_failure_records_run_and_is_not_re_scanned(db):
+    """A failed verdict must record a correlator_runs row so the filing isn't
+    re-selected (and re-billed) every cycle. anomalous IS NULL marks it as a
+    failed attempt, distinct from a clean no-anomaly run (anomalous=0)."""
+    _seed_filing(db, accession="acc-10q", filing_type="10-Q",
+                 filed_at="2026-05-01", status="analyzed")
+    _seed_form4_filing(db, accession="acc-f4", filed_at="2026-05-02")
+    for i in range(3):
+        _seed_tx(db, accession="acc-f4", insider_name=f"insider_{i}",
+                 trade_date="2026-04-30", code="S", shares=50000, price=60.0)
+
+    client = MagicMock()
+    client.complete = MagicMock(side_effect=RuntimeError("api blip"))
+
+    run_once(_config(), db, client)
+    row = db.execute(
+        "SELECT anomalous FROM correlator_runs WHERE accession = ?", ("acc-10q",)
+    ).fetchone()
+    assert row is not None and row["anomalous"] is None  # failed-attempt marker
+
+    # Second pass must not re-consider it (no repeated paid call).
+    client.complete.reset_mock()
+    second = run_once(_config(), db, client)
+    assert second["considered"] == 0
+    client.complete.assert_not_called()

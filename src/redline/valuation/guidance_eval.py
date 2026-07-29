@@ -96,8 +96,15 @@ def grade_guidance(
     fn = len(gold) - len(matched_gold)
     precision = tp / (tp + fp) if (tp + fp) else None
     recall = tp / (tp + fn) if (tp + fn) else None
-    f1 = (2 * precision * recall / (precision + recall)
-          if precision and recall else None)
+    # f1 is None only when precision/recall are undefined (no predictions / no
+    # gold). When both are defined but a run got everything wrong (precision or
+    # recall 0.0), f1 is a real 0.0 — not "not computable".
+    if precision is None or recall is None:
+        f1 = None
+    elif precision + recall == 0:
+        f1 = 0.0
+    else:
+        f1 = 2 * precision * recall / (precision + recall)
 
     per_metric: dict[str, dict] = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0})
     for gi, g in enumerate(gold):
@@ -128,8 +135,8 @@ def _extracted_rows(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def _record(conn: sqlite3.Connection, metric: str, stats: dict) -> None:
-    passed = 1 if (stats.get("f1") is not None and stats["f1"] >= 0.8) else 0
+def _record(conn: sqlite3.Connection, metric: str, stats: dict, *, f1_pass: float) -> None:
+    passed = 1 if (stats.get("f1") is not None and stats["f1"] >= f1_pass) else 0
     conn.execute(
         """INSERT INTO eval_runs (id, event_id, ran_at, prompt_versions, binary_result,
                judge_result, graded_pass, subsystems_tested, notes)
@@ -144,15 +151,17 @@ def _record(conn: sqlite3.Connection, metric: str, stats: dict) -> None:
 def run_eval(config: RedlineConfig, conn: sqlite3.Connection, *, labels_path: str | None = None) -> dict:
     """Grade stored extractions against the gold labels. Writes per-metric eval_runs."""
     path = labels_path or "config/valuation/guidance_labels.yaml"
+    tol = config.valuation.guidance_eval_tolerance
+    f1_pass = config.valuation.guidance_eval_f1_pass
     gold = load_gold(path)
     extracted = _extracted_rows(conn)
-    overall = grade_guidance(extracted, gold, tolerance=_DEFAULT_TOL)
+    overall = grade_guidance(extracted, gold, tolerance=tol)
 
     # Per-metric eval_runs rows (recompute per metric for a clean scorecard).
     for metric in {g["metric"] for g in gold} | {e["metric"] for e in extracted}:
         g_m = [g for g in gold if g["metric"] == metric]
         e_m = [e for e in extracted if e["metric"] == metric]
-        _record(conn, metric, grade_guidance(e_m, g_m, tolerance=_DEFAULT_TOL))
+        _record(conn, metric, grade_guidance(e_m, g_m, tolerance=tol), f1_pass=f1_pass)
     return overall
 
 

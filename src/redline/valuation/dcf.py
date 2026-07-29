@@ -93,6 +93,18 @@ class ScenarioBand(BaseModel):
     base: DcfResult
     bull: DcfResult
 
+    @model_validator(mode="after")
+    def _ordered(self) -> "ScenarioBand":
+        # A mis-signed scenario delta in assumptions.yaml (e.g. a positive bear
+        # growth_delta) would otherwise produce a silently inverted range that
+        # the per_share_low/high property names claim is ordered.
+        if not (self.bear.per_share <= self.base.per_share <= self.bull.per_share):
+            raise ValueError(
+                "scenario band must satisfy bear <= base <= bull "
+                f"(got {self.bear.per_share}, {self.base.per_share}, {self.bull.per_share})"
+            )
+        return self
+
     @property
     def per_share_low(self) -> float:
         return self.bear.per_share
@@ -130,9 +142,16 @@ def value_dcf(inputs: DcfInputs) -> DcfResult:
         last_fcf = fcf
 
     # Gordon-growth terminal value on the final-year FCF, discounted back.
-    terminal_value = last_fcf * (1.0 + inputs.terminal_growth) / (
-        inputs.wacc - inputs.terminal_growth
-    )
+    # DcfInputs._gordon_convergence enforces wacc > terminal_growth on
+    # construction, but the sensitivity mutators use model_copy (which skips
+    # validators), so guard the denominator directly against a divergent sweep.
+    denom = inputs.wacc - inputs.terminal_growth
+    if denom <= 0:
+        raise ValueError(
+            f"wacc ({inputs.wacc}) must exceed terminal_growth "
+            f"({inputs.terminal_growth}) for a convergent Gordon terminal value"
+        )
+    terminal_value = last_fcf * (1.0 + inputs.terminal_growth) / denom
     pv_terminal = terminal_value / (discount ** d.horizon)
 
     enterprise_value = pv_explicit + pv_terminal

@@ -22,13 +22,17 @@ import sqlite3
 
 import streamlit as st
 
+from redline.config import ValuationConfig
 from redline.storage.db import connect
 
 # Names the DCF is credible for vs. monitored-only. Fixed here (presentation
 # policy), not inferred from data, so nothing off-method can slip into a card.
 VALUED = ["VRTX", "ULTA"]
 MONITORED = ["NET", "PLTR", "MRNA"]
-STALE_DAYS = 120
+MECHANISM_TICKER = "NET"  # the guidance before/after "mechanism demo" name
+# Reuse the same staleness window the valuation engine ships with (read the
+# Pydantic default — no TOML/secret dependency for this read-only app).
+STALE_DAYS = ValuationConfig().reference_price_stale_days
 DEFAULT_DB = "data/valuation_demo.db"
 
 
@@ -67,16 +71,25 @@ def _bank_names(conn) -> list[dict]:
         "SELECT ticker, name FROM watchlist WHERE sector = 'financials' ORDER BY ticker")]
 
 
+def _cik_for_ticker(conn, ticker: str) -> str | None:
+    row = conn.execute("SELECT cik FROM watchlist WHERE ticker = ?", (ticker,)).fetchone()
+    return row["cik"] if row else None
+
+
 def _net_mechanism(conn) -> dict | None:
     """The NET guidance event: baseline -> guidance_change, with the input link
     and the triggering 8-K. Illustrates the MECHANISM only (NET's absolute
     valuation is not a target)."""
+    cik = _cik_for_ticker(conn, MECHANISM_TICKER)
+    if cik is None:
+        return None
     before = conn.execute(
-        "SELECT per_share_base b FROM dcf_valuations WHERE cik='0001477333' "
-        "AND run_reason='new_filing' ORDER BY id LIMIT 1").fetchone()
+        "SELECT per_share_base b FROM dcf_valuations WHERE cik=? "
+        "AND run_reason='new_filing' ORDER BY id LIMIT 1", (cik,)).fetchone()
     after = conn.execute(
         "SELECT id, per_share_base b, trigger_accession acc FROM dcf_valuations "
-        "WHERE cik='0001477333' AND run_reason='guidance_change' ORDER BY id DESC LIMIT 1").fetchone()
+        "WHERE cik=? AND run_reason='guidance_change' ORDER BY id DESC LIMIT 1",
+        (cik,)).fetchone()
     if not before or not after:
         return None
     link = conn.execute(

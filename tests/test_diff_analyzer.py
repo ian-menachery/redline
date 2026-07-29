@@ -31,7 +31,10 @@ from redline.config import (
     RedlineConfig,
     StorageConfig,
 )
-from redline.diff.analyzer import MAX_RETRIES, run_once
+from redline.diff.analyzer import run_once
+
+# Retry cap now lives in PollerConfig; pin its default here for the retry tests.
+MAX_RETRIES = 3  # == PollerConfig.max_retries default
 from redline.llm.schemas import DiffGateDecision, DiffSummary
 from redline.storage.db import connect
 from redline.storage.schema import (
@@ -378,6 +381,37 @@ def test_failed_permanent_after_max_retries(db):
     ).fetchone()
     assert status["status"] == "failed_permanent"
     assert status["retry_count"] == MAX_RETRIES
+
+
+def test_diff_rerun_preserves_correlator_flag(db):
+    """The diff analyzer's idempotent flag-clear must delete only its OWN
+    ('diff_material') rows — a correlator_anomaly flag on the same accession
+    must survive a diff (re-)run."""
+    _seed_filing_with_content(
+        db, accession="acc-prior", filed_at="2026-02-01", sections=_BASE_SECTIONS,
+        status="analyzed",
+    )
+    _seed_filing_with_content(
+        db, accession="acc-current", filed_at="2026-05-01",
+        sections=_sections_with_new_risk(),
+    )
+    # A correlator flag already exists on this accession (correlator ran first).
+    db.execute(
+        "INSERT INTO flagged_events (accession, flag_reason, correlator_payload, "
+        "materiality_max, flagged_at) VALUES (?, 'correlator_anomaly', '{}', 0.9, ?)",
+        ("acc-current", "2026-05-02T00:00:00Z"),
+    )
+    gate = DiffGateDecision(substantive=True, reason="x")
+    summary = DiffSummary(change_type="addition", materiality=0.85, summary="x", affected_topics=[])
+    client = _build_client_mock(gate_decisions=[gate], summaries=[summary])
+
+    run_once(_config(), db, client)
+
+    reasons = {
+        r["flag_reason"] for r in db.execute(
+            "SELECT flag_reason FROM flagged_events WHERE accession = ?", ("acc-current",))
+    }
+    assert reasons == {"diff_material", "correlator_anomaly"}  # correlator row survived
 
 
 def test_only_10k_and_10q_picked_up(db):

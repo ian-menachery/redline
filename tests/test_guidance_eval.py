@@ -23,6 +23,14 @@ def test_wrong_value_is_miss_not_match():
     stats = grade_guidance([_g(low=10.0, high=10.2)], [_g(low=12.95, high=13.1)])
     assert stats["tp"] == 0 and stats["fp"] == 1 and stats["fn"] == 1
     assert stats["precision"] == 0.0 and stats["recall"] == 0.0
+    # An all-wrong run has a real F1 of 0.0 — not None ("not computable").
+    assert stats["f1"] == 0.0
+
+
+def test_f1_none_only_when_undefined():
+    # No predictions AND no gold -> precision/recall undefined -> f1 None.
+    empty = grade_guidance([], [])
+    assert empty["precision"] is None and empty["recall"] is None and empty["f1"] is None
 
 
 def test_false_positive_hallucinated_figure():

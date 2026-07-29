@@ -2,9 +2,9 @@
 
 Phase 1 starts on OpenAI (`gpt-4o-mini` cheap / `gpt-4o` quality) to consume
 Ian's $4.98 of OpenAI credits. When OpenAI returns ``insufficient_quota``, the
-client logs a ``provider_switch`` event and flips its process-level
+client logs a ``provider_switch`` event and flips its per-instance
 ``_active_provider`` flag to ``anthropic`` (`claude-haiku-4-5` / `claude-sonnet-4-6`).
-Subsequent calls in the same process skip OpenAI entirely. A fresh process
+Subsequent calls from that instance skip OpenAI entirely. A fresh instance
 restarts on OpenAI by default — if credits are still out at that point, the
 first call falls over again immediately (cheap: a single fast API error).
 
@@ -28,6 +28,10 @@ from redline.llm.log import log_call, log_provider_switch
 T = TypeVar("T", bound=BaseModel)
 
 _LOG = logging.getLogger(__name__)
+
+# §9: a parse failure is a call failure -> one retry with the same prompt, then
+# fail. Total attempts = initial + 1 retry.
+_PARSE_ATTEMPTS = 2
 
 
 class SpendCapExceeded(RuntimeError):
@@ -98,9 +102,10 @@ def _is_openai_quota_exhausted(e: BaseException) -> bool:
 class LLMClient:
     """Single-process LLM client with role-based model dispatch and fallover.
 
-    Construct once per process. The active provider is process-state — once a
-    call triggers fallover, every subsequent call from this instance (and any
-    other instance sharing the same process) uses Anthropic.
+    Construct once per process. The active provider is per-instance state — once
+    a call triggers fallover, every subsequent call from THIS instance uses
+    Anthropic. A separate instance starts on the configured provider again (there
+    is no module-level/global provider state, per CLAUDE.md §7).
     """
 
     def __init__(self, config: RedlineConfig, db: sqlite3.Connection) -> None:
@@ -153,7 +158,7 @@ class LLMClient:
         call_site: str,                  # diff_gate | diff_summary | correlator | eval_judge
         prompt_version: str,
         reusable_context: str | None = None,
-        max_tokens: int = 4096,
+        max_tokens: int | None = None,
     ) -> T:
         """Run one LLM call against the active provider; return a validated schema instance.
 
@@ -166,6 +171,8 @@ class LLMClient:
         """
         if role not in ("cheap", "quality"):
             raise ValueError(f"role must be 'cheap' or 'quality', got {role!r}")
+        if max_tokens is None:
+            max_tokens = self.config.llm.max_tokens_default
 
         self._enforce_spend_cap(call_site=call_site, prompt_version=prompt_version)
 
@@ -217,52 +224,81 @@ class LLMClient:
             if reusable_context else system
         )
 
-        start = time.monotonic()
-        try:
-            resp = self._openai.beta.chat.completions.parse(
-                model=model,
-                messages=[
-                    {"role": "system", "content": sys_content},
-                    {"role": "user", "content": user},
-                ],
-                response_format=schema,
-                max_tokens=max_tokens,
-            )
-        except ValidationError as e:
+        # §9 contract: a parse failure IS a call failure -> retry once with the
+        # same prompt, then propagate. Every attempt is logged (no silent spend).
+        for attempt in range(_PARSE_ATTEMPTS):
+            start = time.monotonic()
+            try:
+                resp = self._openai.beta.chat.completions.parse(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": sys_content},
+                        {"role": "user", "content": user},
+                    ],
+                    response_format=schema,
+                    max_tokens=max_tokens,
+                )
+            except ValidationError as e:
+                log_call(
+                    self.db, provider="openai", model=model, call_site=call_site,
+                    prompt_version=prompt_version, tokens_in=0, tokens_out=0,
+                    cost_usd=0.0,
+                    latency_ms=int((time.monotonic() - start) * 1000),
+                    cache_hit=False, status="parse_error", error_reason=str(e),
+                )
+                if attempt + 1 < _PARSE_ATTEMPTS:
+                    continue
+                raise
+            except Exception as e:
+                # Quota exhaustion is a normal fallover signal handled by
+                # complete(); do not log it as an error. Anything else is a real
+                # API failure and must be logged before it propagates (§9).
+                if not _is_openai_quota_exhausted(e):
+                    log_call(
+                        self.db, provider="openai", model=model, call_site=call_site,
+                        prompt_version=prompt_version, tokens_in=0, tokens_out=0,
+                        cost_usd=0.0,
+                        latency_ms=int((time.monotonic() - start) * 1000),
+                        cache_hit=False, status="error",
+                        error_reason=f"{type(e).__name__}: {e}",
+                    )
+                raise
+
+            latency_ms = int((time.monotonic() - start) * 1000)
+            usage = resp.usage
+            # OpenAI's automatic prompt caching reports cached_tokens under
+            # prompt_tokens_details (when available on the SDK version + model).
+            details = getattr(usage, "prompt_tokens_details", None)
+            cached_tokens = int(getattr(details, "cached_tokens", 0) or 0) if details else 0
+            cost = _openai_cost(model, usage.prompt_tokens, usage.completion_tokens)
+
+            parsed = resp.choices[0].message.parsed
+            if parsed is None:
+                # Billed but empty: log the (real) cost before raising so the
+                # spend cap can't be silently undercounted.
+                log_call(
+                    self.db, provider="openai", model=model, call_site=call_site,
+                    prompt_version=prompt_version,
+                    tokens_in=int(usage.prompt_tokens),
+                    tokens_out=int(usage.completion_tokens),
+                    cost_usd=cost, latency_ms=latency_ms,
+                    cache_hit=cached_tokens > 0, status="empty",
+                    error_reason=f"no parsed output; raw: {resp.choices[0].message.content!r}",
+                )
+                raise RuntimeError(
+                    f"OpenAI returned no parsed output for {call_site}."
+                )
+
             log_call(
                 self.db, provider="openai", model=model, call_site=call_site,
-                prompt_version=prompt_version, tokens_in=0, tokens_out=0,
-                cost_usd=0.0,
-                latency_ms=int((time.monotonic() - start) * 1000),
-                cache_hit=False, status="parse_error", error_reason=str(e),
+                prompt_version=prompt_version,
+                tokens_in=int(usage.prompt_tokens),
+                tokens_out=int(usage.completion_tokens),
+                cost_usd=cost, latency_ms=latency_ms,
+                cache_hit=cached_tokens > 0, status="ok",
             )
-            raise
-        latency_ms = int((time.monotonic() - start) * 1000)
-
-        parsed = resp.choices[0].message.parsed
-        if parsed is None:
-            raise RuntimeError(
-                f"OpenAI returned no parsed output for {call_site}; "
-                f"raw content: {resp.choices[0].message.content!r}"
-            )
-
-        usage = resp.usage
-        # OpenAI's automatic prompt caching reports cached_tokens under
-        # prompt_tokens_details (when available on the SDK version + model).
-        details = getattr(usage, "prompt_tokens_details", None)
-        cached_tokens = int(getattr(details, "cached_tokens", 0) or 0) if details else 0
-
-        cost = _openai_cost(model, usage.prompt_tokens, usage.completion_tokens)
-
-        log_call(
-            self.db, provider="openai", model=model, call_site=call_site,
-            prompt_version=prompt_version,
-            tokens_in=int(usage.prompt_tokens),
-            tokens_out=int(usage.completion_tokens),
-            cost_usd=cost, latency_ms=latency_ms,
-            cache_hit=cached_tokens > 0, status="ok",
-        )
-        return parsed
+            return parsed
+        raise AssertionError("unreachable: _PARSE_ATTEMPTS loop fell through")
 
     # ---- Anthropic --------------------------------------------------------
 
@@ -291,48 +327,73 @@ class LLMClient:
         else:
             sys_blocks = system
 
-        start = time.monotonic()
-        try:
-            resp = self._anthropic.messages.parse(
-                model=model,
-                max_tokens=max_tokens,
-                system=sys_blocks,
-                messages=[{"role": "user", "content": user}],
-                output_format=schema,
+        # §9 contract: retry a parse failure once, then propagate. Every attempt
+        # is logged. Anthropic is the terminal provider (no further fallover),
+        # so any non-parse API error is logged as an error before it propagates.
+        for attempt in range(_PARSE_ATTEMPTS):
+            start = time.monotonic()
+            try:
+                resp = self._anthropic.messages.parse(
+                    model=model,
+                    max_tokens=max_tokens,
+                    system=sys_blocks,
+                    messages=[{"role": "user", "content": user}],
+                    output_format=schema,
+                )
+            except ValidationError as e:
+                log_call(
+                    self.db, provider="anthropic", model=model, call_site=call_site,
+                    prompt_version=prompt_version, tokens_in=0, tokens_out=0,
+                    cost_usd=0.0,
+                    latency_ms=int((time.monotonic() - start) * 1000),
+                    cache_hit=False, status="parse_error", error_reason=str(e),
+                )
+                if attempt + 1 < _PARSE_ATTEMPTS:
+                    continue
+                raise
+            except Exception as e:
+                log_call(
+                    self.db, provider="anthropic", model=model, call_site=call_site,
+                    prompt_version=prompt_version, tokens_in=0, tokens_out=0,
+                    cost_usd=0.0,
+                    latency_ms=int((time.monotonic() - start) * 1000),
+                    cache_hit=False, status="error",
+                    error_reason=f"{type(e).__name__}: {e}",
+                )
+                raise
+
+            latency_ms = int((time.monotonic() - start) * 1000)
+            usage = resp.usage
+            cache_write = int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
+            cache_read = int(getattr(usage, "cache_read_input_tokens", 0) or 0)
+            cost = _anthropic_cost(
+                model, int(usage.input_tokens), int(usage.output_tokens),
+                cache_write, cache_read,
             )
-        except ValidationError as e:
+
+            parsed = resp.parsed_output
+            if parsed is None:
+                log_call(
+                    self.db, provider="anthropic", model=model, call_site=call_site,
+                    prompt_version=prompt_version,
+                    tokens_in=int(usage.input_tokens) + cache_read,
+                    tokens_out=int(usage.output_tokens),
+                    cost_usd=cost, latency_ms=latency_ms,
+                    cache_hit=cache_read > 0, status="empty",
+                    error_reason=f"no parsed_output; stop_reason={getattr(resp, 'stop_reason', None)}",
+                )
+                raise RuntimeError(
+                    f"Anthropic returned no parsed_output for {call_site}."
+                )
+
             log_call(
                 self.db, provider="anthropic", model=model, call_site=call_site,
-                prompt_version=prompt_version, tokens_in=0, tokens_out=0,
-                cost_usd=0.0,
-                latency_ms=int((time.monotonic() - start) * 1000),
-                cache_hit=False, status="parse_error", error_reason=str(e),
+                prompt_version=prompt_version,
+                # tokens_in counts everything billed as input, including cached reads
+                tokens_in=int(usage.input_tokens) + cache_read,
+                tokens_out=int(usage.output_tokens),
+                cost_usd=cost, latency_ms=latency_ms,
+                cache_hit=cache_read > 0, status="ok",
             )
-            raise
-        latency_ms = int((time.monotonic() - start) * 1000)
-
-        parsed = resp.parsed_output
-        if parsed is None:
-            raise RuntimeError(
-                f"Anthropic returned no parsed_output for {call_site}; "
-                f"stop_reason={getattr(resp, 'stop_reason', None)}"
-            )
-
-        usage = resp.usage
-        cache_write = int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
-        cache_read = int(getattr(usage, "cache_read_input_tokens", 0) or 0)
-        cost = _anthropic_cost(
-            model, int(usage.input_tokens), int(usage.output_tokens),
-            cache_write, cache_read,
-        )
-
-        log_call(
-            self.db, provider="anthropic", model=model, call_site=call_site,
-            prompt_version=prompt_version,
-            # tokens_in counts everything billed as input, including cached reads
-            tokens_in=int(usage.input_tokens) + cache_read,
-            tokens_out=int(usage.output_tokens),
-            cost_usd=cost, latency_ms=latency_ms,
-            cache_hit=cache_read > 0, status="ok",
-        )
-        return parsed
+            return parsed
+        raise AssertionError("unreachable: _PARSE_ATTEMPTS loop fell through")

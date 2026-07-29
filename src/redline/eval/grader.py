@@ -100,7 +100,12 @@ def evaluate_pass_criteria(criteria: str, context: dict) -> bool | None:
     try:
         result = eval(normalized, namespace)
         return bool(result)
-    except (NameError, AttributeError, TypeError, ValueError, SyntaxError):
+    except (NameError, AttributeError, TypeError):
+        # Missing/None context field -> the rule can't be evaluated on this
+        # run's data, so defer to the LLM judge. A SyntaxError/ValueError is a
+        # malformed *committed* criterion (a bug, not missing data): let it
+        # propagate loudly rather than silently downgrade a locked binary rule
+        # to a judge call (§4.5 determinism).
         return None
 
 
@@ -300,7 +305,7 @@ def grade_event(
         return Grade(
             event_id=event.id, binary_result=None, judge_result=None,
             graded_pass=False,
-            notes=f"pass_criteria did not evaluate; judge disabled",
+            notes="pass_criteria did not evaluate; judge disabled",
         )
 
     judge = call_judge(client, event=event, context=context)

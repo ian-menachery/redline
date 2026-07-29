@@ -21,6 +21,7 @@ from unittest.mock import MagicMock
 import anthropic
 import openai
 import pytest
+from pydantic import ValidationError
 
 from redline.config import (
     AnthropicConfig,
@@ -304,6 +305,71 @@ def test_non_quota_openai_error_propagates(client):
         )
 
     assert client.active_provider == "openai"  # unchanged
+
+
+# ----- logging on failure + retry-once (§9) --------------------------------
+
+
+def _validation_error() -> ValidationError:
+    try:
+        DiffGateDecision()  # missing required fields -> ValidationError
+    except ValidationError as e:
+        return e
+    raise AssertionError("expected a ValidationError")
+
+
+def test_empty_parsed_output_is_logged_before_raising(client, db):
+    """A billed-but-empty response must log its real cost before raising, so the
+    spend cap can't be silently undercounted."""
+    client._openai.beta.chat.completions.parse.return_value = _make_openai_resp(None)
+
+    with pytest.raises(RuntimeError):
+        client.complete(system="s", user="u", schema=DiffGateDecision,
+                        role="cheap", call_site="diff_gate", prompt_version="v1")
+
+    row = db.execute(
+        "SELECT status, tokens_in, cost_usd FROM llm_call_log WHERE status='empty'"
+    ).fetchone()
+    assert row is not None
+    assert row["tokens_in"] == 500        # billed input tokens logged
+    assert row["cost_usd"] > 0.0          # real cost accrues toward the cap
+
+
+def test_non_quota_error_logs_an_error_row(client, db):
+    client._openai.beta.chat.completions.parse.side_effect = _FakeOpenAIBadRequest()
+    with pytest.raises(openai.BadRequestError):
+        client.complete(system="s", user="u", schema=DiffGateDecision,
+                        role="cheap", call_site="diff_gate", prompt_version="v1")
+    row = db.execute(
+        "SELECT status, error_reason FROM llm_call_log WHERE status='error'"
+    ).fetchone()
+    assert row is not None and "BadRequest" in row["error_reason"]
+
+
+def test_parse_failure_retries_once_then_succeeds(client, db):
+    decision = DiffGateDecision(substantive=True, reason="second try")
+    client._openai.beta.chat.completions.parse.side_effect = [
+        _validation_error(),                 # first attempt fails to parse
+        _make_openai_resp(decision),         # retry succeeds
+    ]
+    result = client.complete(system="s", user="u", schema=DiffGateDecision,
+                             role="cheap", call_site="diff_gate", prompt_version="v1")
+    assert isinstance(result, DiffGateDecision) and result.reason == "second try"
+    statuses = [r["status"] for r in db.execute(
+        "SELECT status FROM llm_call_log ORDER BY id")]
+    assert statuses == ["parse_error", "ok"]   # one retry, both logged
+
+
+def test_parse_failure_retries_once_then_fails(client, db):
+    client._openai.beta.chat.completions.parse.side_effect = [
+        _validation_error(), _validation_error(),
+    ]
+    with pytest.raises(ValidationError):
+        client.complete(system="s", user="u", schema=DiffGateDecision,
+                        role="cheap", call_site="diff_gate", prompt_version="v1")
+    statuses = [r["status"] for r in db.execute(
+        "SELECT status FROM llm_call_log ORDER BY id")]
+    assert statuses == ["parse_error", "parse_error"]   # exactly one retry
 
 
 # ----- prompt caching ------------------------------------------------------

@@ -26,6 +26,7 @@ import json
 import logging
 import sqlite3
 import sys
+from collections.abc import Callable
 
 import edgar
 
@@ -97,6 +98,11 @@ def _assumptions_snapshot(base: XbrlBase, a: CompanyAssumptions, band_inputs: Dc
 def _sensitivity(base_inputs: DcfInputs, band: float) -> dict:
     """One-axis sweeps for the dashboard: WACC and a uniform growth shift."""
     wacc_pts = [round(base_inputs.wacc + d, 4) for d in (-2 * band, -band, 0.0, band, 2 * band)]
+    # Drop any downside WACC point that lands at/below terminal growth: the
+    # Gordon TV diverges there and value_dcf would raise. Excluded, never
+    # fabricated. (The revenue-growth-shift axis only moves explicit-horizon
+    # growth, not WACC or terminal growth, so it needs no such guard.)
+    wacc_pts = [w for w in wacc_pts if w > base_inputs.terminal_growth]
     growth_pts = [-band, 0.0, band]
     return {
         "wacc": sensitivity(base_inputs, mutate=shift_wacc, values=wacc_pts),
@@ -208,7 +214,7 @@ def run_once(
     config: RedlineConfig,
     conn: sqlite3.Connection,
     *,
-    company_factory=edgar.Company,
+    company_factory: Callable[[str], object] = edgar.Company,
     force: bool = False,
 ) -> dict:
     """One revaluation pass over the DCF-eligible watchlist companies."""
@@ -329,7 +335,7 @@ def run_guidance_revaluations(
     config: RedlineConfig,
     conn: sqlite3.Connection,
     *,
-    company_factory=None,
+    company_factory: Callable[[str], object] | None = None,
 ) -> dict:
     """Revalue when a filed 8-K revenue-guidance figure moves the year-1 input.
 

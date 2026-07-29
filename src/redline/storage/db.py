@@ -36,7 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_call_log_call_site
 
 def connect(
     db_path: str | Path, *, read_only: bool = False,
-    check_same_thread: bool = True,
+    check_same_thread: bool = True, busy_timeout_ms: int = 5000,
 ) -> sqlite3.Connection:
     """Open a SQLite connection in WAL mode.
 
@@ -44,6 +44,11 @@ def connect(
     accidental write attempt fails fast instead of contending with the poller.
     Pass ``check_same_thread=False`` when the connection will be shared
     across threads (Streamlit's rerun model). Safe for read-only paths.
+
+    ``busy_timeout_ms`` is how long a write waits on a competing writer before
+    raising ``SQLITE_BUSY`` — WAL allows a single writer, so overlapping
+    ``run_once`` passes (poller + a manual run) would otherwise fail instantly.
+    Default matches ``StorageConfig.busy_timeout_ms``.
     """
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -57,6 +62,7 @@ def connect(
     )
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
     if read_only:
         conn.execute("PRAGMA query_only=ON")
     conn.row_factory = sqlite3.Row

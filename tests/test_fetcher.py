@@ -33,7 +33,6 @@ from redline.config import (
     StorageConfig,
 )
 from redline.fetcher import (
-    MAX_RETRIES,
     _detect_10b5_1,
     _is_issuer_placeholder,
     _normalize_company_name,
@@ -41,6 +40,9 @@ from redline.fetcher import (
 )
 from redline.storage.db import connect
 from redline.storage.schema import init_full_schema, seed_watchlist_from_yaml
+
+# Retry cap now lives in PollerConfig; pin its default here for the retry tests.
+MAX_RETRIES = 3  # == PollerConfig.max_retries default
 
 
 # ---- fixtures -----------------------------------------------------------

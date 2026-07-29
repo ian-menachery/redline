@@ -29,19 +29,29 @@ normalize_tokens       = true
 number_only_skip       = true
 materiality_threshold  = 0.6
 comparison_strategy    = "most_recent_same_type"
+gate_context_chars     = 6000   # Stage 2 prior/current text cap
+summary_context_chars  = 8000   # Stage 3 prior/current text cap
+severity_high          = 0.8    # dashboard high-severity band (medium = materiality_threshold)
 
 [correlator]
 # ±14d join window between filing events and Form 4 transactions
 # (ARCHITECTURE.md §5).
-window_days = 14
+window_days          = 14
+baseline_months      = 12    # insider-baseline lookback (NOTES.md §3.1)
+min_baseline_trades  = 3     # below this a per-insider signal abstains
+cluster_saturation   = 3.0   # cluster score hits 1.0 at this many same-direction insiders
+zscore_saturation    = 2.0   # volume score hits 1.0 at this many stdevs
 
 [poller]
 # 15-minute cadence (ARCHITECTURE.md §2). UA format per NOTES.md §4.
-cadence_seconds  = 900
-edgar_user_agent = "Redline (hatcher.ry@northeastern.edu)"
+cadence_seconds   = 900
+edgar_user_agent  = "Redline (hatcher.ry@northeastern.edu)"
+max_retries       = 3    # pipeline retry cap before failed_permanent (ARCHITECTURE.md §7)
+retry_after_hours = 1    # min wait before retrying a stale failure
 
 [storage]
-db_path = "data/redline.db"
+db_path         = "data/redline.db"
+busy_timeout_ms = 5000   # SQLite write wait on a competing writer
 
 [valuation]
 # DCF valuation layer (Subsystem 7). Per-company drivers/WACC/terminal/
@@ -55,3 +65,7 @@ fcf_mapping_path         = "config/valuation/fcf_mapping_v1.yaml"
 fcf_validation_tolerance = 0.10    # reconstructed vs known_fcf; above -> unvalidated base
 reference_price_stale_days = 120
 min_trigger_confidence   = 0.75    # 8-K guidance below this -> manual_review, not a revaluation trigger
+guidance_reaffirm_tolerance = 0.005  # within this band vs prior period -> "reaffirmed"
+max_exhibit_chars        = 24000   # cap on 8-K EX-99.1 text sent to the extractor
+guidance_eval_tolerance  = 0.02    # guidance-eval value-match tolerance
+guidance_eval_f1_pass    = 0.8     # guidance-eval F1 pass bar

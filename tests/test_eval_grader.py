@@ -83,8 +83,12 @@ def test_evaluate_missing_top_level_name_returns_none():
     assert evaluate_pass_criteria("flagged_events.materiality_max >= 0.6", ctx) is None
 
 
-def test_evaluate_syntax_error_returns_none():
-    assert evaluate_pass_criteria("this is not (valid python", {}) is None
+def test_evaluate_syntax_error_propagates():
+    """A malformed *committed* criterion is a bug, not missing data: it must
+    raise loudly rather than silently downgrade a locked binary rule to the LLM
+    judge (§4.5 determinism)."""
+    with pytest.raises(SyntaxError):
+        evaluate_pass_criteria("this is not (valid python", {})
 
 
 def test_evaluate_none_value_short_circuit():

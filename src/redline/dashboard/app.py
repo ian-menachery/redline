@@ -18,8 +18,15 @@ from pathlib import Path
 
 import streamlit as st
 
-from redline.config import RedlineConfig
+from redline.config import CorrelatorConfig, DiffConfig, RedlineConfig
 from redline.storage.db import connect
+
+# Presentation constants, sourced from the config defaults so the dashboard
+# tracks the same thresholds/windows the pipeline uses (no bare literals).
+_SEVERITY_MAJOR = DiffConfig().severity_high            # >= this -> "Major"
+_SEVERITY_NOTABLE = DiffConfig().materiality_threshold  # >= this -> "Notable"
+_FORM4_WINDOW_DAYS = CorrelatorConfig().window_days     # ±N-day Form 4 window
+_EVENT_LIMIT = 50                                       # findings shown in the list
 
 
 # ---------------------------------------------------------------------------
@@ -122,9 +129,9 @@ def _severity(materiality: float | None) -> tuple[str, str]:
     """Return (label, css_class). Major / Notable / Minor / Routine."""
     if materiality is None:
         return "Routine", "routine"
-    if materiality >= 0.8:
+    if materiality >= _SEVERITY_MAJOR:
         return "Major", "major"
-    if materiality >= 0.6:
+    if materiality >= _SEVERITY_NOTABLE:
         return "Notable", "notable"
     return "Minor", "minor"
 
@@ -474,7 +481,7 @@ def _render_sidebar(conn: sqlite3.Connection) -> dict:
         "filing_type": filing_type_sel,
         "flag_reason": flag_reason_sel,
         "min_materiality": min_materiality,
-        "limit": 50,
+        "limit": _EVENT_LIMIT,
     }
 
 
@@ -631,11 +638,12 @@ def _render_finding_card(conn: sqlite3.Connection, event: dict) -> None:
 
                 txs = _form4_transactions_in_window(
                     conn, cik=event["cik"],
-                    center_date=event["filed_at"], window_days=14,
+                    center_date=event["filed_at"], window_days=_FORM4_WINDOW_DAYS,
                 )
                 if txs:
                     st.markdown(
-                        f"**Form 4 transactions in ±14d window** ({len(txs)} total)"
+                        f"**Form 4 transactions in ±{_FORM4_WINDOW_DAYS}d window** "
+                        f"({len(txs)} total)"
                     )
                     st.dataframe(txs, use_container_width=True, hide_index=True)
 

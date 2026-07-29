@@ -40,8 +40,8 @@ _LOG = logging.getLogger(__name__)
 # semantic content per ARCHITECTURE.md §3).
 SECTIONS: list[str] = ["mdna", "risk_factors", "legal", "qdmr"]
 
-MAX_RETRIES = 3
-RETRY_AFTER_HOURS = 1
+# Retry policy lives in PollerConfig (max_retries / retry_after_hours) — one
+# source shared by the fetcher and the diff analyzer (ARCHITECTURE.md §7).
 
 
 # ---------------------------------------------------------------------------
@@ -52,9 +52,12 @@ def _now_iso() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
-def _pending_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+def _pending_rows(
+    conn: sqlite3.Connection, *, max_retries: int, retry_after_hours: int,
+) -> list[sqlite3.Row]:
     """Rows eligible for diff: 10-K/10-Q at status='parsed' or analysis_failed
-    older than the retry window."""
+    older than the retry window. (Both ints are trusted config values, not user
+    input — safe to interpolate.)"""
     return conn.execute(
         f"""
         SELECT accession, cik, filing_type, filed_at, retry_count
@@ -64,11 +67,11 @@ def _pending_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
               status = 'parsed'
               OR (
                   status = 'analysis_failed'
-                  AND retry_count < {MAX_RETRIES}
+                  AND retry_count < {int(max_retries)}
                   AND (
                       last_attempted IS NULL
                       OR datetime(last_attempted)
-                         < datetime('now', '-{RETRY_AFTER_HOURS} hour')
+                         < datetime('now', '-{int(retry_after_hours)} hour')
                   )
               )
           )
@@ -166,9 +169,13 @@ def _mark_analyzed(conn: sqlite3.Connection, accession: str) -> None:
 
 def _mark_failed(
     conn: sqlite3.Connection, *, accession: str, retry_count: int, reason: str,
+    max_retries: int,
 ) -> None:
     new_count = retry_count + 1
-    new_status = "failed_permanent" if new_count >= MAX_RETRIES else "analysis_failed"
+    # NOTE: retry_count starts at 0, so this permits the initial attempt plus
+    # (max_retries - 1) retries before failed_permanent. Intended count is kept
+    # deliberate here rather than changed (would shift the locked eval's paths).
+    new_status = "failed_permanent" if new_count >= max_retries else "analysis_failed"
     conn.execute(
         """
         UPDATE filings_seen SET
@@ -205,8 +212,14 @@ def _analyze_one(
                 "stage2_substantive": 0, "stage3_summarized": 0, "materiality_max": 0.0}
 
     # Idempotent re-run: clear any partial output from a prior failed attempt.
+    # Scope the flag delete to this subsystem's own reason — the correlator
+    # writes a 'correlator_anomaly' row on the same accession, and an unscoped
+    # delete would silently wipe the insider-trading flag on a diff re-run.
     conn.execute("DELETE FROM diff_results WHERE accession = ?", (accession,))
-    conn.execute("DELETE FROM flagged_events WHERE accession = ?", (accession,))
+    conn.execute(
+        "DELETE FROM flagged_events WHERE accession = ? AND flag_reason = 'diff_material'",
+        (accession,),
+    )
 
     prior_accession = prior["accession"]
     prior_sections = json.loads(prior["sections"])
@@ -233,7 +246,10 @@ def _analyze_one(
             continue
 
         for change in changes:
-            gate_decision = stage2_gate(client, section=section_name, change=change)
+            gate_decision = stage2_gate(
+                client, section=section_name, change=change,
+                context_chars=config.diff.gate_context_chars,
+            )
             _insert_diff_result(
                 conn,
                 accession=accession, prior_accession=prior_accession,
@@ -257,6 +273,7 @@ def _analyze_one(
             summary = stage3_summarize(
                 client, section=section_name, change=change,
                 gate_reason=gate_decision.reason,
+                context_chars=config.diff.summary_context_chars,
             )
             summary_dict = summary.model_dump()
             _insert_diff_result(
@@ -303,7 +320,11 @@ def run_once(
     client: LLMClient,
 ) -> dict:
     """One diff-analysis pass over all parsed 10-K/10-Q filings."""
-    rows = _pending_rows(conn)
+    max_retries = config.poller.max_retries
+    rows = _pending_rows(
+        conn, max_retries=max_retries,
+        retry_after_hours=config.poller.retry_after_hours,
+    )
     per_filing: list[dict] = []
     analyzed = 0
     failed = 0
@@ -329,6 +350,7 @@ def run_once(
             _mark_failed(
                 conn, accession=accession,
                 retry_count=row["retry_count"], reason=reason,
+                max_retries=max_retries,
             )
             failed += 1
             per_filing.append({

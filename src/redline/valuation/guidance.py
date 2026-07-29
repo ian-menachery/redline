@@ -25,6 +25,7 @@ import datetime
 import logging
 import sqlite3
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import edgar
@@ -83,10 +84,13 @@ def _is_earnings_8k(filing) -> bool:
 def extract_guidance(
     client: LLMClient, *, exhibit_text: str, ticker: str,
     prompts_dir: str | Path = "config/prompts",
+    max_chars: int = _MAX_EXHIBIT_CHARS,
 ) -> GuidanceExtraction:
-    """One quality-role LLM call: EX-99.1 text -> typed guidance figures."""
+    """One quality-role LLM call: EX-99.1 text -> typed guidance figures.
+
+    ``max_chars`` caps the exhibit text sent (ValuationConfig.max_exhibit_chars)."""
     system = _load_prompt(prompts_dir)
-    user = f"Company: {ticker}\n\nEARNINGS RELEASE:\n{exhibit_text[:_MAX_EXHIBIT_CHARS]}"
+    user = f"Company: {ticker}\n\nEARNINGS RELEASE:\n{exhibit_text[:max_chars]}"
     return client.complete(
         system=system, user=user, schema=GuidanceExtraction,
         role="quality", call_site=CALL_SITE, prompt_version=PROMPT_VERSION,
@@ -126,29 +130,34 @@ def _prior_guidance(
     ).fetchone()
 
 
-def _delta(conn, *, cik, fig: GuidanceFigure, accession: str) -> tuple[str, str | None]:
-    """Return (delta_direction, prior_accession-less marker). Direction is
-    initiated / raised / lowered / reaffirmed."""
+def _delta(
+    conn: sqlite3.Connection, *, cik: str, fig: GuidanceFigure, accession: str,
+    reaffirm_tol: float = _REAFFIRM_TOL,
+) -> str:
+    """Delta direction vs the prior release's same figure:
+    initiated / raised / lowered / reaffirmed. Midpoint moves within
+    ``reaffirm_tol`` (fractional) count as reaffirmed."""
     prior = _prior_guidance(conn, cik=cik, metric=fig.metric, period=fig.period,
                             basis=fig.basis, exclude_accession=accession)
     if prior is None:
-        return "initiated", None
+        return "initiated"
     cur_mid = _midpoint(fig.low, fig.high)
     prior_mid = _midpoint(prior["low"], prior["high"])
     if cur_mid is None or prior_mid is None or prior_mid == 0:
-        return "reaffirmed" if fig.is_reaffirmed else "initiated", None
+        return "reaffirmed" if fig.is_reaffirmed else "initiated"
     change = (cur_mid - prior_mid) / abs(prior_mid)
-    if abs(change) <= _REAFFIRM_TOL:
-        return "reaffirmed", None
-    return ("raised" if change > 0 else "lowered"), None
+    if abs(change) <= reaffirm_tol:
+        return "reaffirmed"
+    return "raised" if change > 0 else "lowered"
 
 
 def _store_figure(
     conn: sqlite3.Connection, *, accession: str, cik: str, fig: GuidanceFigure,
-    min_conf: float,
+    min_conf: float, reaffirm_tol: float = _REAFFIRM_TOL,
 ) -> str:
     review = _review_status(fig, min_conf)
-    direction, _ = _delta(conn, cik=cik, fig=fig, accession=accession)
+    direction = _delta(conn, cik=cik, fig=fig, accession=accession,
+                       reaffirm_tol=reaffirm_tol)
     # Resolve the prior accession for the audit trail (may be None).
     prior = _prior_guidance(conn, cik=cik, metric=fig.metric, period=fig.period,
                             basis=fig.basis, exclude_accession=accession)
@@ -209,13 +218,15 @@ def run_once(
     conn: sqlite3.Connection,
     client: LLMClient,
     *,
-    filing_factory=None,
+    filing_factory: Callable[[str], object] | None = None,
 ) -> dict:
     """Extract guidance from unprocessed item-2.02 8-Ks for the DCF names."""
     if filing_factory is None:
         filing_factory = edgar.find
     edgar.set_identity(config.poller.edgar_user_agent)
     min_conf = config.valuation.min_trigger_confidence
+    reaffirm_tol = config.valuation.guidance_reaffirm_tolerance
+    max_chars = config.valuation.max_exhibit_chars
 
     per_filing: list[dict] = []
     processed = 0
@@ -237,7 +248,9 @@ def run_once(
                 per_filing.append({"accession": accession, "status": "no_exhibit"})
                 continue
 
-            extraction = extract_guidance(client, exhibit_text=exhibit, ticker=ticker)
+            extraction = extract_guidance(
+                client, exhibit_text=exhibit, ticker=ticker, max_chars=max_chars,
+            )
             n_elig = 0
             stored = 0
             for fig in extraction.figures:
@@ -246,7 +259,8 @@ def run_once(
                 if fig.low is None and fig.high is None:
                     continue
                 review = _store_figure(conn, accession=accession, cik=cik,
-                                       fig=fig, min_conf=min_conf)
+                                       fig=fig, min_conf=min_conf,
+                                       reaffirm_tol=reaffirm_tol)
                 n_elig += int(review == "trigger_eligible")
                 stored += 1
             _record_run(conn, accession=accession, is_earnings=True,

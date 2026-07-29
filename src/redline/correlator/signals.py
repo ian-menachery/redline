@@ -30,9 +30,36 @@ from __future__ import annotations
 import sqlite3
 import statistics
 from dataclasses import dataclass
+from typing import TypedDict
 
 # Codes considered "economically meaningful" per NOTES.md §3.
 DISCRETIONARY_CODES: set[str] = {"P", "S"}
+
+
+class ClusterSignal(TypedDict):
+    """cluster_signal() payload — surfaced in the LLM prompt + correlator_payload."""
+
+    sellers: list[str]
+    buyers: list[str]
+    max_cluster_size: int
+    score: float
+
+
+class InsiderSignal(TypedDict, total=False):
+    """Per-insider volume/direction payload. Keys vary: the abstain case carries
+    ``score=None`` + ``reason``; the scored case carries the computed fields."""
+
+    score: float | None
+    reason: str
+    baseline_n: int
+    window_total: float
+    baseline_mean: float
+    baseline_std: float
+    z_score: float
+    flipped: bool
+    magnitude: float
+    baseline_direction: float
+    window_direction: float
 
 # Baseline threshold below which volume/direction signals abstain.
 MIN_BASELINE_TRADES = 3
@@ -142,10 +169,12 @@ def load_insider_baseline(
 # Signals
 # ---------------------------------------------------------------------------
 
-def cluster_signal(trades: list[Trade]) -> dict:
+def cluster_signal(trades: list[Trade], *, saturation: float = 3.0) -> ClusterSignal:
     """Multi-insider cluster signal.
 
-    Score: 0 with no cluster, 1.0 once 3+ insiders trade same-direction.
+    Score: 0 with no cluster, 1.0 once ``saturation`` insiders trade
+    same-direction (default 3; the orchestrator supplies
+    ``CorrelatorConfig.cluster_saturation``).
     """
     discretionary = [t for t in trades if t.is_discretionary]
     sellers = sorted({t.insider_name for t in discretionary if t.is_sell})
@@ -155,7 +184,7 @@ def cluster_signal(trades: list[Trade]) -> dict:
         "sellers": sellers,
         "buyers": buyers,
         "max_cluster_size": max_cluster,
-        "score": min(max_cluster / 3.0, 1.0),
+        "score": min(max_cluster / saturation, 1.0),
     }
 
 
@@ -172,14 +201,16 @@ def _trade_value_total(trades: list[Trade]) -> float:
 
 def volume_signal(
     window_trades: list[Trade], baseline_trades: list[Trade],
-) -> dict:
+    *, min_baseline: int = MIN_BASELINE_TRADES, zscore_saturation: float = 2.0,
+) -> InsiderSignal:
     """Per-insider volume vs trailing baseline.
 
     ``window_trades`` should be a single insider's trades in the ±14d window.
-    Returns ``None`` score when baseline has < MIN_BASELINE_TRADES historical
-    trades — the signal abstains rather than guess.
+    Returns ``None`` score when baseline has < ``min_baseline`` historical
+    trades — the signal abstains rather than guess. ``zscore_saturation`` is the
+    z-score at which the score saturates to 1.0 (both from ``CorrelatorConfig``).
     """
-    if len(baseline_trades) < MIN_BASELINE_TRADES:
+    if len(baseline_trades) < min_baseline:
         return {"score": None, "reason": "insufficient_baseline",
                 "baseline_n": len(baseline_trades)}
 
@@ -192,8 +223,8 @@ def volume_signal(
     window_total = _trade_value_total(window_trades)
 
     z = (window_total - base_mean) / base_std if base_std else 0.0
-    # Score: clamp z-score above 0 to [0, 1]. z>=2 -> 1.0; below mean -> 0.
-    score = max(0.0, min(z / 2.0, 1.0))
+    # Score: clamp z-score above 0 to [0, 1]. z>=saturation -> 1.0; below mean -> 0.
+    score = max(0.0, min(z / zscore_saturation, 1.0))
     return {
         "score": score,
         "window_total": window_total,
@@ -206,13 +237,14 @@ def volume_signal(
 
 def direction_flip_signal(
     window_trades: list[Trade], baseline_trades: list[Trade],
-) -> dict:
+    *, min_baseline: int = MIN_BASELINE_TRADES,
+) -> InsiderSignal:
     """Did the insider's in-window direction reverse their baseline pattern?
 
     "Direction" is the sign of (buys - sells) summed by trade value.
-    Returns ``None`` score on insufficient baseline.
+    Returns ``None`` score on baseline < ``min_baseline`` (from CorrelatorConfig).
     """
-    if len(baseline_trades) < MIN_BASELINE_TRADES:
+    if len(baseline_trades) < min_baseline:
         return {"score": None, "reason": "insufficient_baseline",
                 "baseline_n": len(baseline_trades)}
 

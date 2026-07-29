@@ -18,14 +18,14 @@ def _load_prompt(prompts_dir: str | Path) -> str:
     return Path(prompts_dir, f"diff_gate_{PROMPT_VERSION}.txt").read_text(encoding="utf-8")
 
 
-def _format_user(section: str, change: Stage1Change) -> str:
+def _format_user(section: str, change: Stage1Change, context_chars: int) -> str:
     old = change.old or "(nothing — pure insertion)"
     new = change.new or "(nothing — pure deletion)"
     return (
         f"Section: {section}\n"
         f"Change type: {change.tag}\n\n"
-        f"OLD:\n{old[:6000]}\n\n"
-        f"NEW:\n{new[:6000]}"
+        f"OLD:\n{old[:context_chars]}\n\n"
+        f"NEW:\n{new[:context_chars]}"
     )
 
 
@@ -35,10 +35,14 @@ def gate(
     section: str,
     change: Stage1Change,
     prompts_dir: str | Path = "config/prompts",
+    context_chars: int = 6000,
 ) -> DiffGateDecision:
-    """Run a single chunk through the Stage 2 gate."""
+    """Run a single chunk through the Stage 2 gate.
+
+    ``context_chars`` caps the OLD/NEW text per side (DiffConfig.gate_context_chars).
+    """
     system = _load_prompt(prompts_dir)
-    user = _format_user(section, change)
+    user = _format_user(section, change, context_chars)
     return client.complete(
         system=system,
         user=user,

@@ -139,3 +139,24 @@ def test_multi_year_horizon_runs():
     r = value_dcf(_inputs(drivers=_drivers(years=5)))
     assert r.per_share > 0
     assert r.pv_explicit > 0 and r.pv_terminal > 0
+
+
+def test_scenario_band_rejects_inverted_ordering():
+    """A mis-signed delta that makes bear > bull must raise, not silently ship
+    an inverted 'range'."""
+    from redline.valuation.dcf import DcfResult, ScenarioBand
+
+    def _res(ps: float) -> DcfResult:
+        return DcfResult(per_share=ps, enterprise_value=ps, equity_value=ps,
+                         pv_explicit=ps, pv_terminal=0.0, terminal_value_fraction=0.0)
+    with pytest.raises(ValidationError):
+        ScenarioBand(bear=_res(20.0), base=_res(15.0), bull=_res(10.0))  # inverted
+
+
+def test_value_dcf_raises_on_inverted_gordon():
+    """The sensitivity mutators use model_copy, which skips the
+    _gordon_convergence validator, so value_dcf must guard the denominator
+    itself: wacc <= terminal_growth is a hard error, not a silent negative TV."""
+    inverted = shift_wacc(_inputs(terminal_growth=0.02), 0.01)  # wacc 0.01 < tg 0.02
+    with pytest.raises(ValueError, match="terminal_growth"):
+        value_dcf(inverted)

@@ -40,7 +40,6 @@ _LOG = logging.getLogger(__name__)
 
 PROMPT_VERSION = "v1"
 TRIGGER_TYPES: list[str] = ["10-K", "10-Q", "8-K"]
-WINDOW_DAYS = 14
 
 
 # ---------------------------------------------------------------------------
@@ -132,11 +131,12 @@ def _sweep_form4_to_analyzed(conn: sqlite3.Connection) -> int:
 def _build_user_message(
     *, ticker: str, filing_type: str, filed_at: str,
     trades: list[Trade], cluster: dict, per_insider: list[dict],
+    window_days: int,
 ) -> str:
     lines: list[str] = [
         f"Filing: {ticker} {filing_type} filed {filed_at}",
         "",
-        f"All Form 4 transactions in ±{WINDOW_DAYS} day window ({len(trades)} total):",
+        f"All Form 4 transactions in ±{window_days} day window ({len(trades)} total):",
     ]
     for t in trades:
         plan_marker = " [10b5-1]" if t.is_10b5_1 == 1 else ""
@@ -227,24 +227,32 @@ def _analyze_one(
         return {"trades_in_window": len(trades), "discretionary": 0,
                 "anomalous": False, "reason": "all_plan_or_admin"}
 
-    cluster = cluster_signal(trades)
+    corr = config.correlator
+    cluster = cluster_signal(trades, saturation=corr.cluster_saturation)
     per_insider: list[dict] = []
     for insider in sorted({t.insider_name for t in discretionary}):
         window_trades = [t for t in discretionary if t.insider_name == insider]
         baseline = load_insider_baseline(
             conn, cik=cik, insider_name=insider,
             before_date=filed_at,
-            months_back=12,  # NOTES.md §3.1 recommended default
+            months_back=corr.baseline_months,  # NOTES.md §3.1 recommended default
         )
         per_insider.append({
             "insider": insider,
-            "volume": volume_signal(window_trades, baseline),
-            "direction": direction_flip_signal(window_trades, baseline),
+            "volume": volume_signal(
+                window_trades, baseline,
+                min_baseline=corr.min_baseline_trades,
+                zscore_saturation=corr.zscore_saturation,
+            ),
+            "direction": direction_flip_signal(
+                window_trades, baseline, min_baseline=corr.min_baseline_trades,
+            ),
         })
 
     user = _build_user_message(
         ticker=ticker, filing_type=filing_type, filed_at=filed_at,
         trades=trades, cluster=cluster, per_insider=per_insider,
+        window_days=corr.window_days,
     )
     verdict = _call_llm(client, system=prompt, user=user)
 
@@ -314,6 +322,17 @@ def run_once(
             _LOG.warning("Correlator failure for %s: %s", accession, reason)
             failed += 1
             per_filing.append({"accession": accession, "error": reason})
+            # Record the attempt so _pending_rows stops re-selecting it every
+            # cycle (which would re-fire a paid quality-role call indefinitely).
+            # anomalous=NULL is a state the success/abstain paths never produce,
+            # so a failed run is distinguishable from a clean no-anomaly one; the
+            # failure detail is surfaced in this run's summary. Not auto-retried —
+            # re-running requires clearing the correlator_runs row.
+            _record_run(
+                conn, accession=accession,
+                trades_in_window=0, discretionary_count=0,
+                anomalous=None, confidence=None,
+            )
 
     return {
         "form4_swept_to_analyzed": swept,
