@@ -4,7 +4,7 @@ Operating manual for any Claude session working in this repo. Reference sections
 
 ## §1 — Project summary
 
-`redline` is a scheduled SEC EDGAR monitoring system for a fixed 8-ticker watchlist. It performs structured analysis on new filings (10-K / 10-Q / 8-K / Form 4) by combining (a) quarter-over-quarter section diffs on MD&A, Risk Factors, Legal Proceedings, and Quantitative Disclosures About Market Risk, and (b) Form 4 insider-trading correlation against filing events on a ±14-day window. Flagged events surface via a local Streamlit dashboard. The project is graded by an evals harness running against 12 pre-registered historical filing events; scores are reported per-subsystem and globally.
+`redline` is a scheduled SEC EDGAR monitoring system for a fixed 8-ticker watchlist. It performs structured analysis on new filings (10-K / 10-Q / 8-K / Form 4) by combining (a) quarter-over-quarter section diffs on MD&A, Risk Factors, Legal Proceedings, and Quantitative Disclosures About Market Risk, and (b) Form 4 insider-trading correlation against filing events on a ±14-day window. Flagged events surface via a local Streamlit dashboard. The project is graded by an evals harness running against a locked, pre-registered set of historical filing events (3 of a planned 12 registered so far); scores are reported per-subsystem and globally.
 
 Built as a resume artifact for Dec 2026 full-time recruiting (primary: tech consulting, DS/analyst; secondary: SWE). Ian starts as an EY Technology Consulting intern in summer 2026. The system should defend well in any of those interview contexts.
 
@@ -66,7 +66,7 @@ These were debated, including a critical review pass. The reasoning is preserved
 
 4. **Insider-trading correlator has a base-rate problem.** Form 4 transactions happen weekly at large companies, mostly under pre-arranged 10b5-1 plans that are uncorrelated by design with then-current filings. The correlator MUST distinguish plan-driven from discretionary trades and define "anomalous" precisely, or it produces visually impressive but substantively meaningless output.
 
-5. **Evals harness is non-negotiable.** 12 historical filing events, pre-registered in a versioned file with `locked_at` timestamps inside each entry. Cherry-picking structurally prevented. Eval is permanently locked — fresh events go in a separate "live operation log" for recent-activity demos, never into the graded eval.
+5. **Evals harness is non-negotiable.** A locked set of historical filing events — 12 planned, 3 pre-registered so far (the remaining 9 deferred to a later phase) — each registered in a versioned file with a `locked_at` timestamp inside its entry. Cherry-picking structurally prevented. Eval is permanently locked — fresh events go in a separate "live operation log" for recent-activity demos, never into the graded eval.
 
 6. **Small fixed watchlist (8 tickers, 4 sectors), not universe-wide.** Quality of analysis matters more than coverage.
 
@@ -188,7 +188,7 @@ redline/
 
   config/
     watchlist.yaml         # 8 tickers + CIKs (CIK authoritative)
-    eval_events.yaml       # 12 events, each with locked_at timestamp
+    eval_events.yaml       # eval events (3 of 12 planned), each with locked_at timestamp
     settings.toml          # thresholds, windows, polling cadence, weights
     prompts/
       diff_gate_v1.txt

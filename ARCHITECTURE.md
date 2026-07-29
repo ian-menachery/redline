@@ -15,7 +15,7 @@ flowchart LR
     DB[(SQLite)]
     DASH[Streamlit Dashboard<br/>read-only]
     ALERT[Email/push alerts<br/>Phase 2]
-    EVAL[Eval Harness<br/>12 events]
+    EVAL[Eval Harness<br/>3 of 12 planned]
     REPLAY[Replay Mode<br/>point-in-time]
 
     EDGAR --> POLL --> FETCH --> PARSE
@@ -471,7 +471,7 @@ FCF-base validation eval writes to `eval_runs` under the `fcf_validation:<ticker
 
 ## §11 — Eval harness
 
-**Inputs:** `config/eval_events.yaml` — 12 entries, each with `id`, `ticker`, `filing_type`, `period`, `tests`, `pass_criteria`, `llm_judge_rubric`, `locked_at`.
+**Inputs:** `config/eval_events.yaml` — 3 pre-registered entries (of a planned 12), each with `id`, `ticker`, `filing_type`, `period`, `tests`, `pass_criteria`, `llm_judge_rubric`, `locked_at`.
 
 **Execution model:** for each event, run replay mode (§12) at the appropriate historical timestamp, feed the target filing through only the tagged subsystems, capture outputs, then grade.
 
@@ -507,7 +507,7 @@ What lives where:
 | Type | Location | Loaded via |
 |---|---|---|
 | Watchlist (8 tickers + CIKs) | `config/watchlist.yaml` | Pydantic model `Watchlist` |
-| Eval events (12, with `locked_at`) | `config/eval_events.yaml` | Pydantic model list `EvalEvent` |
+| Eval events (3 of 12 planned, with `locked_at`) | `config/eval_events.yaml` | Pydantic model list `EvalEvent` |
 | Prompt templates (versioned text) | `config/prompts/<name>_v<n>.txt` | Pydantic wrapper `PromptTemplate { version, content, output_schema }` |
 | Runtime settings (thresholds, weights, windows, polling cadence, model assignments) | `config/settings.toml` | `pydantic-settings` `RedlineConfig` |
 | Pipeline state, content cache, transactions, results | `data/redline.db` | SQLite, via `storage/db.py` |
