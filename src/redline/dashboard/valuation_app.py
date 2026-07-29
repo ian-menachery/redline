@@ -182,9 +182,10 @@ def main() -> None:
             )
             st.markdown(f"[View the source 8-K on SEC EDGAR]({_edgar_url(m['accession'])})")
         with c2:
-            st.metric("Modeled base (before → after)",
-                      f"${m['after']:,.2f}", delta=f"{m['after'] - m['before']:+.2f}")
-            st.caption("Illustrative mechanism, not a price target.")
+            st.metric("Effect on the modeled estimate",
+                      f"{(m['after'] / m['before'] - 1):+.1%}")
+            st.caption("How much the estimate moved after the filing — an illustrative "
+                       "mechanism. No absolute NET valuation is shown; this is not a price target.")
 
     st.divider()
 
