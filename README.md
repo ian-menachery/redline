@@ -1,12 +1,12 @@
 # redline
 
-![tests](https://img.shields.io/badge/tests-174%20passing-2c7a3f) ![python](https://img.shields.io/badge/python-3.11%2B-3776ab) ![llm](https://img.shields.io/badge/llm-OpenAI%20%2B%20Anthropic-1e3a5f) ![dashboard](https://img.shields.io/badge/dashboard-Streamlit-ff4b4b) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
+![tests](https://img.shields.io/badge/tests-199%20passing-2c7a3f) ![python](https://img.shields.io/badge/python-3.11%2B-3776ab) ![llm](https://img.shields.io/badge/llm-OpenAI%20%2B%20Anthropic-1e3a5f) ![dashboard](https://img.shields.io/badge/dashboard-Streamlit-ff4b4b) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
 Scheduled SEC EDGAR monitoring for a fixed 8-ticker watchlist. Detects substantive QoQ/YoY changes in 10-K / 10-Q section disclosures via a three-stage diff filter, joins Form 4 insider transactions to filing events on a ±14-day window, and surfaces flagged events through a Streamlit dashboard. Includes a pre-registered eval harness measuring accuracy against historical filing events.
 
-**Status:** Phase 1 MVP complete, plus a shipped DCF valuation layer (Subsystem 7). **2/3** on the 3 of 12 pre-registered eval events (tag [`eval-pre-registration-v1`](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1)). 174/174 tests passing. Total real LLM spend across the entire build: **$1.76** ($1.27 OpenAI + $0.49 Anthropic, under a $3 hard cap).
+**Status:** Phase 1 MVP complete, plus a shipped DCF valuation layer (Subsystem 7). **2/3** on the 3 of 12 pre-registered eval events (tag [`eval-pre-registration-v1`](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1)). 199/199 tests passing. Total real LLM spend across the entire build: **$1.76** ($1.27 OpenAI + $0.49 Anthropic, under a $3 hard cap).
 
-**Live demo:** [redline-edgar.streamlit.app](https://redline-edgar.streamlit.app/) (disclosure monitor). A second dashboard for the DCF valuation layer is deployed at [redline-valuations.streamlit.app](https://redline-valuations.streamlit.app/) *(public visibility pending)*.
+**Live demos:** [redline-edgar.streamlit.app](https://redline-edgar.streamlit.app/) (disclosure monitor) and [redline-valuations.streamlit.app](https://redline-valuations.streamlit.app/) (DCF valuation dashboard).
 
 ![dashboard screenshot](Screenshot.png)
 
@@ -21,7 +21,7 @@ Scheduled SEC EDGAR monitoring for a fixed 8-ticker watchlist. Detects substanti
 | Cadence | 15-minute polling, EDGAR fair-access compliant |
 | LLM provider | OpenAI today (`gpt-4o-mini` cheap-role + `gpt-4o` quality-role), automatic fallover to Anthropic on `insufficient_quota` |
 | Pipeline state machine | `fetched → parsed → analyzed → flagged` with retry queue (3 retries, 1-hour window) |
-| Tests | 174 passing |
+| Tests | 199 passing |
 | Real LLM spend across the entire build | $1.76 ($1.27 OpenAI + $0.49 Anthropic) |
 
 ---
@@ -188,7 +188,7 @@ All locked in [`CLAUDE.md`](CLAUDE.md) §4. Each survived a critical review pass
 - **`edgartools`** for EDGAR access
 - **OpenAI SDK** + **Anthropic SDK** behind a provider-agnostic client with exception-driven fallover
 - **Streamlit** for the dashboard
-- **pytest** — 174 tests covering parsers, three-stage filter, anomaly signals, eval grader, LLM client, storage, and the DCF valuation layer (DCF engine, FCF reconstruction, XBRL ingest, guidance extraction + its precision/recall grader, and the revaluation hook)
+- **pytest** — 199 tests covering parsers, three-stage filter, anomaly signals, eval grader, LLM client, storage, and the DCF valuation layer (DCF engine, FCF reconstruction, XBRL ingest, guidance extraction + its precision/recall grader, and the revaluation hook)
 
 ---
 
