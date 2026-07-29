@@ -138,6 +138,118 @@ CREATE TABLE IF NOT EXISTS correlator_runs (
 );
 """
 
+# Subsystem 7 (DCF valuation). Companyfacts ingestion sink — one row per
+# (concept, fiscal period). The UNIQUE key makes re-ingest idempotent and lets
+# the refresh upsert the latest reported value. Restatement *history* is not
+# preserved here (get_facts() returns the point-in-time-of-fetch view with no
+# per-fact source accession); that would need per-filing XBRL and is out of
+# scope for the XBRL-only revaluation core. See NOTES.md §6.
+XBRL_FACTS_DDL = """
+CREATE TABLE IF NOT EXISTS xbrl_facts (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    cik           TEXT NOT NULL,
+    concept       TEXT NOT NULL,
+    label         TEXT,
+    unit          TEXT,
+    period_type   TEXT,
+    fiscal_year   INTEGER,
+    fiscal_period TEXT,
+    period_start  DATE,
+    period_end    DATE,
+    numeric_value REAL,
+    ingested_at   TIMESTAMP NOT NULL,
+    UNIQUE (cik, concept, fiscal_year, fiscal_period, period_start, period_end)
+);
+CREATE INDEX IF NOT EXISTS idx_xbrl_facts_cik_concept
+    ON xbrl_facts (cik, concept, fiscal_year);
+"""
+
+# Subsystem 7 — typed forward-guidance figures extracted from 8-K earnings
+# exhibits (the differentiated "flagged change -> model input" path; NOTES §6
+# / §7). Contrast with the diff analyzer's free-text ``affected_topics``: these
+# are typed, ranged, basis/period-qualified, and confidence-gated.
+EXTRACTED_FIGURES_DDL = """
+CREATE TABLE IF NOT EXISTS extracted_figures (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    accession              TEXT NOT NULL REFERENCES filings_seen(accession),
+    cik                    TEXT NOT NULL,
+    metric                 TEXT NOT NULL,
+    scope                  TEXT NOT NULL,      -- total | segment (only 'total' drives a model input)
+    period                 TEXT NOT NULL,
+    low                    REAL,
+    high                   REAL,
+    unit                   TEXT NOT NULL,
+    basis                  TEXT NOT NULL,
+    is_reaffirmed          INTEGER NOT NULL,
+    confidence             REAL NOT NULL,
+    context                TEXT,
+    review_status          TEXT NOT NULL,      -- trigger_eligible | manual_review
+    delta_direction        TEXT,               -- raised | lowered | reaffirmed | initiated
+    delta_prior_accession  TEXT REFERENCES filings_seen(accession),
+    prompt_version         TEXT NOT NULL,
+    parser_version         TEXT NOT NULL,
+    extracted_at           TIMESTAMP NOT NULL,
+    eval_run_id            TEXT,
+    UNIQUE (accession, metric, scope, period, basis)
+);
+CREATE INDEX IF NOT EXISTS idx_extracted_figures_cik_metric
+    ON extracted_figures (cik, metric, period);
+"""
+
+# Subsystem 7 valuation history — intentionally APPEND-ONLY (the deliberate
+# break from the project's latest-state storage; that is what makes the
+# before/after revaluation story possible). One row per revaluation.
+DCF_VALUATIONS_DDL = """
+CREATE TABLE IF NOT EXISTS dcf_valuations (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    cik                 TEXT NOT NULL,
+    run_reason          TEXT NOT NULL,
+    trigger_accession   TEXT REFERENCES filings_seen(accession),
+    wacc                REAL NOT NULL,
+    terminal_growth     REAL NOT NULL,
+    assumptions_json    TEXT NOT NULL,
+    per_share_bear      REAL NOT NULL,
+    per_share_base      REAL NOT NULL,
+    per_share_bull      REAL NOT NULL,
+    sensitivity_json    TEXT,
+    reference_price     REAL,
+    reference_price_asof DATE,
+    model_version       TEXT NOT NULL,
+    valued_at           TIMESTAMP NOT NULL,
+    eval_run_id         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_dcf_valuations_cik_valued
+    ON dcf_valuations (cik, valued_at);
+"""
+
+# Audit trail: which real number moved which model input for a given
+# revaluation. Empty for a plain quarterly refresh with no input change.
+VALUATION_INPUT_LINKS_DDL = """
+CREATE TABLE IF NOT EXISTS valuation_input_links (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    valuation_id  INTEGER NOT NULL REFERENCES dcf_valuations(id),
+    input_name    TEXT NOT NULL,
+    old_value     REAL,
+    new_value     REAL,
+    source        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_valuation_input_links_valuation
+    ON valuation_input_links (valuation_id);
+"""
+
+# Subsystem 7 — marks 8-K accessions the guidance extractor has processed
+# (mirrors correlator_runs), so no-guidance releases aren't re-processed each
+# cycle. A row means "guidance extraction ran against this 8-K exactly once."
+GUIDANCE_RUNS_DDL = """
+CREATE TABLE IF NOT EXISTS guidance_runs (
+    accession      TEXT PRIMARY KEY REFERENCES filings_seen(accession),
+    ran_at         TIMESTAMP NOT NULL,
+    is_earnings    INTEGER NOT NULL,   -- had item 2.02 + an EX-99 exhibit
+    has_guidance   INTEGER NOT NULL,
+    figures_found  INTEGER NOT NULL
+);
+"""
+
 # Eval harness scorecard (ARCHITECTURE.md §10).
 EVAL_RUNS_DDL = """
 CREATE TABLE IF NOT EXISTS eval_runs (
@@ -170,6 +282,11 @@ def init_full_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(DIFF_RESULTS_DDL)
     conn.executescript(FLAGGED_EVENTS_DDL)
     conn.executescript(CORRELATOR_RUNS_DDL)
+    conn.executescript(XBRL_FACTS_DDL)
+    conn.executescript(EXTRACTED_FIGURES_DDL)
+    conn.executescript(DCF_VALUATIONS_DDL)
+    conn.executescript(VALUATION_INPUT_LINKS_DDL)
+    conn.executescript(GUIDANCE_RUNS_DDL)
     conn.executescript(EVAL_RUNS_DDL)
 
 

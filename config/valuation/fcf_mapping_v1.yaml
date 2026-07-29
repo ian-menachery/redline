@@ -1,0 +1,36 @@
+# FCF concept mapping v1 — us-gaap tags per FCF line, primary first then
+# fallbacks. Used by valuation/fcf.py::reconstruct_fcf_from_facts (the DB-based
+# fallback + validation second opinion; the PRIMARY base path is edgartools'
+# canonical accessors — see NOTES.md §6). Concepts are namespaced ("us-gaap:").
+#
+# Versioned like prompts: a bump (v2) is a modeling change, not a config tweak,
+# and should be recorded with rationale.
+#
+# FCF proxy: operating_cash_flow − capex (matches edgartools get_free_cash_flow).
+
+operating_cash_flow:
+  - us-gaap:NetCashProvidedByUsedInOperatingActivities
+  - us-gaap:NetCashProvidedByUsedInOperatingActivitiesContinuingOperations
+
+capex:
+  - us-gaap:PaymentsToAcquirePropertyPlantAndEquipment
+  - us-gaap:PaymentsForCapitalImprovements
+  - us-gaap:PaymentsToAcquireProductiveAssets
+
+revenue:
+  - us-gaap:Revenues
+  - us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+
+# Balance-sheet items for the net_debt bridge (instant concepts). Debt varies
+# sharply by filer — PLTR/VRTX are essentially debt-free (no total-debt tag);
+# CVNA carries real LongTermDebt. When no debt tag resolves, net_debt = -cash
+# (net-cash assumed) and the base is flagged.
+cash:
+  - us-gaap:CashAndCashEquivalentsAtCarryingValue
+  - us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents
+
+total_debt:
+  - us-gaap:LongTermDebt
+  - us-gaap:LongTermDebtAndCapitalLeaseObligations
+  - us-gaap:LongTermDebtNoncurrent
+  - us-gaap:DebtInstrumentCarryingAmount

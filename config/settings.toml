@@ -6,6 +6,12 @@
 # Active provider on process start. Falls over to anthropic on
 # insufficient_quota — see ARCHITECTURE.md §9 (Provider Fallover).
 provider = "openai"
+# Hard spending cap ($). The client refuses any LLM call once cumulative logged
+# spend (SUM(cost_usd) in llm_call_log for the DB in use) reaches this. Counts
+# ALL prior spend in that DB — e.g. data/redline.db already holds ~$1.27 from
+# Phase 1, so ~$1.73 of headroom remains under a $3 cap. Scratch/in-memory DBs
+# start at $0. Overshoot is bounded by one in-flight call (cents).
+max_spend_usd = 3.0
 
 [llm.openai]
 cheap_model   = "gpt-4o-mini"  # Stage 2 diff gate, etc.
@@ -36,3 +42,16 @@ edgar_user_agent = "Redline (hatcher.ry@northeastern.edu)"
 
 [storage]
 db_path = "data/redline.db"
+
+[valuation]
+# DCF valuation layer (Subsystem 7). Per-company drivers/WACC/terminal/
+# reference_price/known_fcf live in assumptions_path; these are global knobs.
+# See NOTES.md §6 (Phase 0 findings) and ARCHITECTURE.md.
+projection_years         = 5
+terminal_growth_default  = 0.025   # per-company assumptions.yaml overrides this
+sensitivity_band_pct     = 0.02
+assumptions_path         = "config/valuation/assumptions.yaml"
+fcf_mapping_path         = "config/valuation/fcf_mapping_v1.yaml"
+fcf_validation_tolerance = 0.10    # reconstructed vs known_fcf; above -> unvalidated base
+reference_price_stale_days = 120
+min_trigger_confidence   = 0.75    # 8-K guidance below this -> manual_review, not a revaluation trigger

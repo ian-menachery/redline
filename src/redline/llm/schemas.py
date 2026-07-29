@@ -68,6 +68,50 @@ class CorrelatorVerdict(_StrictModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
+class GuidanceFigure(_StrictModel):
+    """One quantitative forward-guidance figure from an 8-K earnings exhibit.
+
+    Guidance is quoted as a point or a range; ``low``/``high`` capture both
+    (equal for a point). ``basis`` and ``period`` are first-class because a
+    number is meaningless without them (failure mode #1 — silent extraction
+    error). ``is_reaffirmed`` marks guidance restated unchanged vs. a fresh or
+    revised figure.
+    """
+
+    metric: Literal[
+        "revenue", "eps", "comparable_sales", "operating_margin",
+        "ebitda", "operating_income", "other",
+    ]
+    scope: Literal["total", "segment"] = Field(
+        ...,
+        description=(
+            "total = company-wide headline guidance for the period; "
+            "segment = a sub-component / business unit / product line / geographic "
+            "slice (e.g. 'U.S. commercial revenue'). Only 'total' may drive a model input."
+        ),
+    )
+    period: str = Field(..., description="Fiscal period the guidance covers, e.g. 'FY2026'.")
+    low: float | None = Field(..., description="Low end of the range (or the point value).")
+    high: float | None = Field(..., description="High end of the range (equals low for a point).")
+    unit: Literal["usd", "usd_billions", "usd_millions", "pct", "usd_per_share"]
+    basis: Literal["gaap", "non_gaap", "adjusted", "unspecified"]
+    is_reaffirmed: bool = Field(..., description="True if restating prior guidance unchanged.")
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    context: str = Field(..., description="The sentence the figure was stated in.")
+
+
+class GuidanceExtraction(_StrictModel):
+    """Typed forward-guidance extracted from one 8-K EX-99.1 earnings release.
+
+    ``cheap``-to-``quality`` judgment call: guidance parsing (ranges, basis,
+    period disambiguation) is reasoning-heavy, so this is a ``quality``-role
+    call site (``guidance_extract``).
+    """
+
+    has_guidance: bool
+    figures: list[GuidanceFigure] = Field(default_factory=list)
+
+
 class EvalJudgeVerdict(_StrictModel):
     """LLM-as-judge fallback (``quality`` role).
 

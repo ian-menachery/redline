@@ -1,0 +1,143 @@
+# DCF assumptions for the 6 non-financial watchlist names.
+# Banks (SCHW, KEY) are intentionally absent — unlevered-FCF DCF is wrong for
+# financials (NOTES.md §6).
+#
+# COST-OF-CAPITAL & REFERENCE PRICES — VERIFIED by Ian, transcribed 2026-07-28.
+# `is_placeholder: false` on all 6 (Rf/ERP/beta sourced offline; see per-company
+# provenance comments below — these are the audit trail).
+#   GLOBAL inputs behind each WACC (provenance; the config stores the resulting
+#   per-company `wacc` constant, not the components — §4 "no market-data feed"):
+#     - Rf = 4.65%   (FRED DGS10, 2026-07-27)
+#     - ERP = 4.50%  (Damodaran)
+#     - statutory tax = 21%  (encoded per-company as `tax_rate: 0.21`)
+#   reference_price = a dated MANUAL market price (Ian-set, 2026-07-27); not a
+#   feed. Still GROUNDED in reported XBRL (unchanged this pass): revenue_growth,
+#   operating_margin, capex_pct_revenue, known_fcf. Forward margin ASSUMPTIONS
+#   for the currently-unprofitable names (NET, CVNA, MRNA) are unchanged.
+#
+# nwc_pct_revenue = OPERATING working capital as a fraction of revenue.
+# revenue_growth: per projection year (fades toward terminal); shorter lists are
+# padded with the last value to the horizon.
+
+- ticker: PLTR
+  cik: "0001321655"
+  name: Palantir Technologies Inc.
+  # CAPM: Rf 4.65% + beta 1.57 x ERP 4.50%; beta per Yahoo 5Y monthly (verified 2026-07-27); debt negligible.
+  wacc: 0.117
+  tax_rate: 0.21
+  terminal_growth: 0.03
+  revenue_growth: [0.35, 0.30, 0.25, 0.20, 0.15]   # grounded: FY24 +29%, FY25 +56%
+  operating_margin: 0.32 # grounded: FY25 GAAP op margin ~31.6%
+  capex_pct_revenue: 0.01
+  da_pct_revenue: 0.02
+  nwc_pct_revenue: 0.03
+  bear: {growth_delta: -0.12, margin_delta: -0.06}
+  bull: {growth_delta: 0.06, margin_delta: 0.03}
+  reference_price: 123.53
+  reference_price_asof: "2026-07-27"
+  known_fcf: 2100600000      # grounded: FY25 FCF ~2.10B
+  known_fcf_asof: FY2025
+  is_placeholder: false
+
+- ticker: NET
+  cik: "0001477333"
+  name: Cloudflare, Inc.
+  # CAPM: Rf 4.65% + beta 1.67 x ERP 4.50%, blended ~4.5% debt; beta per Yahoo 5Y monthly (verified 2026-07-27). Price corrected 2026-07-27 (prior research value $108.50 was wrong; actual ~$264).
+  wacc: 0.118
+  tax_rate: 0.21
+  terminal_growth: 0.03
+  revenue_growth: [0.28, 0.25, 0.22, 0.18, 0.15]   # grounded: ~29% recent
+  operating_margin: 0.15 # ASSUMPTION: GAAP op margin is -9.6% today; assumes SBC-driven margin expansion to +15% — VERIFY
+  capex_pct_revenue: 0.10 # grounded ~14.6%, assumed to fade
+  da_pct_revenue: 0.04
+  nwc_pct_revenue: 0.03
+  bear: {growth_delta: -0.10, margin_delta: -0.08}
+  bull: {growth_delta: 0.05, margin_delta: 0.05}
+  reference_price: 264.10
+  reference_price_asof: "2026-07-27"
+  known_fcf: 287500000       # grounded: FY25 FCF ~288M
+  known_fcf_asof: FY2025
+  is_placeholder: false
+  low_confidence_note: "GAAP-operating-unprofitable; valuation hinges on the margin-expansion assumption."
+
+- ticker: MRNA
+  cik: "0001682852"
+  name: Moderna, Inc.
+  # JUDGMENT CALL: CAPM unreliable for cash-burning biotech; Damodaran biotechnology SECTOR cost of capital used (~8.5%). Do NOT use any 'distress-spread'/'Broken-CAPM-Guard'/14.08% figure from the research report — that methodology is unsourced and must not enter the config. Price corrected 2026-07-27 (prior research value $24.71 was wrong; actual ~$55.81).
+  wacc: 0.085
+  tax_rate: 0.21
+  terminal_growth: 0.02
+  revenue_growth: [-0.15, 0.00, 0.08, 0.10, 0.10]  # SPECULATIVE: revenue declined ~40-53%/yr post-COVID; assumes stabilization+recovery
+  operating_margin: 0.12 # SPECULATIVE: op margin is -158% today; assumes pipeline-driven recovery — VERIFY
+  capex_pct_revenue: 0.08
+  da_pct_revenue: 0.05
+  nwc_pct_revenue: 0.05
+  bear: {growth_delta: -0.10, margin_delta: -0.12}
+  bull: {growth_delta: 0.10, margin_delta: 0.08}
+  reference_price: 55.81
+  reference_price_asof: "2026-07-27"
+  known_fcf: -2065000000     # grounded: FY25 FCF ~ -2.07B (NEGATIVE)
+  known_fcf_asof: FY2025
+  is_placeholder: false
+  low_confidence_note: "LOW CONFIDENCE: declining revenue, deeply negative FCF/margins. A standard growth DCF is highly speculative here; treat output as illustrative only. Candidate for exclusion."
+
+- ticker: VRTX
+  cik: "0000875320"
+  name: Vertex Pharmaceuticals Inc
+  # CAPM: Rf 4.65% + beta 0.29 x ERP 4.50%; beta per Yahoo 5Y monthly (verified 2026-07-27); low-debt.
+  wacc: 0.060
+  tax_rate: 0.21
+  terminal_growth: 0.025
+  revenue_growth: [0.10, 0.09, 0.08, 0.07, 0.06]   # grounded: ~9-12%
+  operating_margin: 0.35 # grounded: ~34.8%
+  capex_pct_revenue: 0.04
+  da_pct_revenue: 0.03
+  nwc_pct_revenue: 0.03
+  bear: {growth_delta: -0.04, margin_delta: -0.05}
+  bull: {growth_delta: 0.03, margin_delta: 0.03}
+  reference_price: 490.39
+  reference_price_asof: "2026-07-27"
+  known_fcf: 3193800000      # grounded: FY25 FCF ~3.19B
+  known_fcf_asof: FY2025
+  is_placeholder: false
+
+- ticker: CVNA
+  cik: "0001690820"
+  name: Carvana Co.
+  # JUDGMENT CALL: raw 5Y beta 3.46 is distorted by the 2022 solvency crash and rebound (inflated covariance), so NOT used raw. Anchored to Damodaran retail sector cost of capital (~8%) adjusted UP for CVNA's above-average leverage and cyclicality -> 11%. Deliberately below the artifact-inflated ~17% raw-CAPM figure and above stable-retail ~8%.
+  wacc: 0.110
+  tax_rate: 0.21
+  terminal_growth: 0.03
+  revenue_growth: [0.30, 0.25, 0.20, 0.15, 0.12]   # grounded: ~27-49%
+  operating_margin: 0.06 # ASSUMPTION: op margin ~0% today; assumes expansion to 6% — VERIFY
+  capex_pct_revenue: 0.01
+  da_pct_revenue: 0.02
+  nwc_pct_revenue: 0.03
+  bear: {growth_delta: -0.12, margin_delta: -0.04}
+  bull: {growth_delta: 0.06, margin_delta: 0.03}
+  reference_price: 66.07
+  reference_price_asof: "2026-07-27"
+  known_fcf: 889000000       # grounded: FY25 FCF ~889M
+  known_fcf_asof: FY2025
+  is_placeholder: false
+  low_confidence_note: "Near-breakeven GAAP margins; valuation sensitive to the margin-expansion assumption."
+
+- ticker: ULTA
+  cik: "0001403568"
+  name: Ulta Beauty, Inc.
+  # CAPM: Rf 4.65% + beta 0.88 x ERP 4.50%, blended ~7.5% lease-adjusted debt; beta per Yahoo 5Y monthly (verified 2026-07-27).
+  wacc: 0.083
+  tax_rate: 0.21
+  terminal_growth: 0.025
+  revenue_growth: [0.06, 0.05, 0.05, 0.04, 0.04]   # grounded: ~1-10%
+  operating_margin: 0.12 # grounded: ~12.4%
+  capex_pct_revenue: 0.035
+  da_pct_revenue: 0.03
+  nwc_pct_revenue: 0.03
+  bear: {growth_delta: -0.03, margin_delta: -0.03}
+  bull: {growth_delta: 0.03, margin_delta: 0.02}
+  reference_price: 501.52
+  reference_price_asof: "2026-07-27"
+  known_fcf: 1068000000      # grounded: FY25 FCF ~1.07B
+  known_fcf_asof: FY2025
+  is_placeholder: false

@@ -299,3 +299,29 @@ diff_analyzer  2/2   (key_10k_fy22, cvna_10k_fy22)
 ```
 
 Total OpenAI spend for the 3-event scorecard: ~$1.27 (398 Stage 2 + 199 Stage 3 + 1 correlator calls). Run time: ~17 minutes wall-clock (TPM-throttled Stage 3 calls dominate). The remaining 9 events stay un-pre-registered until Phase 2.
+
+## §6 — DCF valuation layer: Phase 0 feasibility findings (2026-07-27)
+
+Diagnostic: `spike/valuation_feasibility.py` (throwaway) + `spike/valuation_feasibility.json`. Answers the gate that decides the DCF-layer design (plan `cheerful-moseying-conway.md`). **Answers the long-open §5 XBRL question above: structured numeric extraction IS available and clean via `Company.get_facts()`.**
+
+**edgartools financials API (5.31.0) — confirmed, undocumented until now:**
+- `Company.get_facts().to_dataframe()` → companyfacts as a DataFrame, columns `concept, label, value, numeric_value, unit, period_type, period_start, period_end, fiscal_year, fiscal_period`. **`concept` is namespaced** (`us-gaap:Revenues`) — matching bare names silently yields nothing (cost me a false "0/8" first pass).
+- `Company.get_financials()` → `Financials` with ready helpers: `get_free_cash_flow()`, `get_capital_expenditures()`, `get_operating_cash_flow()`, `get_revenue()`, `get_shares_outstanding_basic/diluted()`. Gives the FCF mapping a canonical primary path + a free independent second opinion for `validate_fcf`.
+
+**XBRL spine: 8/8 CLEAN → PROCEED.** Every watchlist name has clean multi-year FCF-concept coverage (revenue / operating cash flow / capex): PLTR 6y, NET 7y, MRNA 8y, ULTA 8y, CVNA 7y, KEY 10y, VRTX 16y, SCHW 17y. `get_free_cash_flow()` works for all 8. The reliable quarterly-refresh spine is viable.
+
+**Narrative guidance from MD&A: NOT viable (mechanical hit_rate 0.281 is mostly false positives).** Verified by hand: genuine forward revenue/EPS guidance essentially does not appear in the 10-K/10-Q MD&A that Redline diffs. The mechanical hits concentrate in MRNA (deferred-revenue realization language — "$37M is *expected* to be realized", not guidance) and SCHW (residual results-of-operations churn). Root cause: **companies issue quantitative guidance in 8-K earnings-release exhibits (Ex-99.1), not in MD&A.** A first naive detector scored 0.844 — 100% churn false positives ("expense increased 5.0%"); a sentence-bounded forward-only detector (perf lesson: whole-document lazy-quantifier regex catastrophically backtracks on 300k-char bank filings) drops it to ~0 genuine.
+
+**Two design decisions taken with Ian (2026-07-27):**
+1. **XBRL-only revaluation core now.** The differentiated "flagged narrative change → model input" hook is deferred to a separately-feasibility-gated **8-K earnings-exhibit** extraction follow-on (that is where guidance lives). Not built on the false MD&A premise.
+2. **Banks excluded from DCF.** SCHW + KEY are financials; an unlevered-FCF DCF (OCF − capex) is not a meaningful model for them. DCF the other 6 (PLTR, NET, MRNA, VRTX, CVNA, ULTA); show the 2 banks as "not DCF-modeled (financial sector)".
+
+## §7 — 8-K guidance extraction (the differentiated hook, 2026-07-27)
+
+**Feasibility gate PASSED** (`spike/guidance_8k_feasibility.py`, `.log`): guidance_rate = 20/25 = **0.80** of item-2.02 8-Ks carry extractable forward guidance — the opposite of MD&A (§6). Genuine ranges confirmed by hand: VRTX "FY2026 revenue guidance of $12.95B to $13.1B", MRNA "expects 2025 revenue of ~$1.9B", CVNA "adjusted EBITDA of $2.0 to $2.2B for full year 2025", ULTA "fiscal 2026 net sales growth of 6.0% to 7.0%".
+
+**edgartools 8-K exhibit access:** `filing.obj().items` lists items (`"Item 2.02"`); `filing.attachments` yields `Attachment` objects with `document_type` (e.g. `"EX-99.1"`) and `.text()` → the press-release text (~36-113k chars). The earnings release is EX-99.1, not the 8-K body.
+
+**Built:** `valuation/guidance.py` (fetch EX-99.1 → quality-role LLM typed extraction → `extracted_figures` with confidence gate `trigger_eligible`/`manual_review` + period-over-period `raised/lowered/reaffirmed/initiated` delta), `GuidanceFigure`/`GuidanceExtraction` schemas, `guidance_extract_v1.txt` prompt, `guidance_runs` marker table. `revalue.run_guidance_revaluations` maps a filed revenue-guidance figure → year-1 growth override → immutable valuation with a `guidance`-source before/after link. `guidance_eval.py` = precision/recall grader (pure `grade_guidance`, unit-tested) vs `guidance_labels.yaml`. Regex alone is too noisy (feasibility spike caught balance figures with a "fiscal 20XX" cue) — hence LLM-typed.
+
+**⚠ BLOCKER — no live LLM run yet.** OpenAI returns **429 insufficient_quota** (credits exhausted) and there is no `ANTHROPIC_API_KEY` in `.env`, so the provider fallover (§9) has nowhere to land. All guidance code is unit-tested with a mocked client (11 tests), but a live extraction awaits Ian either topping up OpenAI or adding an Anthropic key. Two consequences until then: (a) `guidance_labels.yaml` accessions are `TBD-*` placeholders (curate as real extractions land); (b) `extracted_figures` is empty in the live DB, so the dashboard guidance surface shows nothing yet.

@@ -134,6 +134,42 @@ def client(db, monkeypatch):
     return c
 
 
+# ----- spend cap -----------------------------------------------------------
+
+
+def _seed_spend(db, cost):
+    from redline.llm.log import log_call
+    log_call(db, provider="openai", model="gpt-4o", call_site="diff_summary",
+             prompt_version="v1", tokens_in=1000, tokens_out=100,
+             cost_usd=cost, latency_ms=10, cache_hit=False, status="ok")
+
+
+def test_spend_cap_blocks_call_and_makes_no_api_request(client, db):
+    from redline.llm.client import SpendCapExceeded
+    _seed_spend(db, 3.0)  # at the $3 cap already
+    client._openai.beta.chat.completions.parse.side_effect = AssertionError(
+        "no API request may be made once the cap is reached")
+
+    with pytest.raises(SpendCapExceeded):
+        client.complete(system="s", user="u", schema=DiffGateDecision,
+                        role="cheap", call_site="diff_gate", prompt_version="v1")
+
+    # a spend_cap sentinel row is logged, at zero cost
+    row = db.execute(
+        "SELECT status, cost_usd FROM llm_call_log WHERE call_site='spend_cap'"
+    ).fetchone()
+    assert row["status"] == "info" and row["cost_usd"] == 0.0
+
+
+def test_under_cap_call_proceeds(client, db):
+    _seed_spend(db, 1.50)  # below the $3 cap
+    decision = DiffGateDecision(substantive=True, reason="ok")
+    client._openai.beta.chat.completions.parse.return_value = _make_openai_resp(decision)
+    result = client.complete(system="s", user="u", schema=DiffGateDecision,
+                             role="cheap", call_site="diff_gate", prompt_version="v1")
+    assert isinstance(result, DiffGateDecision)
+
+
 # ----- _is_openai_quota_exhausted ------------------------------------------
 
 

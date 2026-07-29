@@ -2,6 +2,7 @@
 data/*
 !data/.gitkeep
 !data/demo.db
+!data/valuation_demo.db
 .env
 .env.local
 .env.*.local
@@ -35,6 +36,7 @@ desktop.ini
 # Spike scratch + runtime outputs (graduate or delete before Phase 1)
 spike/scratch/
 spike/*.json
+spike/*.log
 
 # Local Claude session artifacts
 .claude/

@@ -29,6 +29,15 @@ T = TypeVar("T", bound=BaseModel)
 
 _LOG = logging.getLogger(__name__)
 
+
+class SpendCapExceeded(RuntimeError):
+    """Raised when a call is refused because the logged spend cap is reached.
+
+    A hard stop, not a retryable error — no API request is made. Callers that
+    sweep many items (e.g. guidance/diff run_once) will see this per remaining
+    item; the spend simply stops accruing.
+    """
+
 # Per-1M-token rates ($). Update when providers re-price.
 _OPENAI_RATES: dict[str, tuple[float, float]] = {
     "gpt-4o-mini": (0.15, 0.60),     # (input, output)
@@ -105,6 +114,35 @@ class LLMClient:
     def active_provider(self) -> str:
         return self._active_provider
 
+    def spent_usd(self) -> float:
+        """Cumulative logged LLM spend in the active DB ($)."""
+        row = self.db.execute(
+            "SELECT COALESCE(SUM(cost_usd), 0.0) FROM llm_call_log"
+        ).fetchone()
+        return float(row[0]) if row and row[0] is not None else 0.0
+
+    def _enforce_spend_cap(self, *, call_site: str, prompt_version: str) -> None:
+        """Refuse the call (no API request) if the spend cap is already reached.
+
+        Checked before every call. Overshoot is bounded by one in-flight call,
+        since a call's cost is only known once it returns.
+        """
+        cap = self.config.llm.max_spend_usd
+        spent = self.spent_usd()
+        if spent >= cap:
+            log_call(
+                self.db, provider=self._active_provider, model="-",
+                call_site="spend_cap", prompt_version=prompt_version,
+                tokens_in=0, tokens_out=0, cost_usd=0.0, latency_ms=0,
+                cache_hit=False, status="info",
+                error_reason=(f"spend cap ${cap:.2f} reached (logged ${spent:.4f}); "
+                              f"blocked {call_site}"),
+            )
+            raise SpendCapExceeded(
+                f"LLM spend cap ${cap:.2f} reached (logged ${spent:.4f}); "
+                f"refusing {call_site} call."
+            )
+
     def complete(
         self,
         *,
@@ -128,6 +166,8 @@ class LLMClient:
         """
         if role not in ("cheap", "quality"):
             raise ValueError(f"role must be 'cheap' or 'quality', got {role!r}")
+
+        self._enforce_spend_cap(call_site=call_site, prompt_version=prompt_version)
 
         if self._active_provider == "openai":
             try:

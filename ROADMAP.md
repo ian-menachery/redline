@@ -72,6 +72,16 @@ Goal: ship polish that makes the project defensible in extended interview conver
 - **Form 144 ingestion.** Second correlator signal — proposed open-market sales by affiliates. Adds context for distinguishing 10b5-1 from discretionary.
 - **Anomaly-score weight tuning.** Use Phase 1 eval results to set non-trivial weights on the three signals. Document the tuning process (cross-validation? eyeball calibration? both?) in `NOTES.md`.
 
+## DCF valuation layer (Subsystem 7) — BUILT 2026-07-27
+
+Event-driven revaluation from XBRL financials (NOT sentiment, NOT alpha — see `CLAUDE.md` §4). Shipped: XBRL companyfacts ingestion, a range-based DCF engine (bear/base/bull + sensitivity), an immutable before/after revaluation hook triggered by new periodic filings, a mandatory FCF-base validation eval, and a dashboard section. Covers the 6 non-financials (banks excluded). See `NOTES.md` §6 and `CLAUDE.md` §11.
+
+**Follow-ups (deferred, each needs its own feasibility gate before building):**
+- **8-K earnings-exhibit guidance extraction.** The real "flagged change → model input" hook. Phase 0 verified guidance is NOT in MD&A (it's in Ex-99.1 press releases). Requires new 8-K exhibit parsing + a typed-figure extractor + its own extraction-accuracy eval. Do not start without confirming guidance is reliably extractable.
+- **Verify assumption constants.** Replace placeholder WACC / terminal growth / manual reference prices in `config/valuation/assumptions.yaml` (currently `is_placeholder: true`).
+- **Bank valuation model.** SCHW/KEY need a financials-appropriate model (dividend-discount / residual-income / P-TBV) if they're to be valued at all.
+- **Reconsider MRNA.** Declining revenue + negative FCF make its DCF speculative; candidate for exclusion.
+
 ## Phase 3 — Stretch (optional, post-recruiting)
 
 Goal: things worth building if there's bandwidth after recruiting, but not part of the resume artifact.

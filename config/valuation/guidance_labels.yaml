@@ -1,0 +1,76 @@
+# Gold labels for the 8-K guidance-extraction eval (precision/recall).
+# Curated 2026-07-28 by reading each EX-99.1 earnings release INDEPENDENTLY of
+# the extractor output (circularity guard). Each entry is a top-level forward
+# guidance figure with its real accession.
+#
+# SCOPING (documented, principled):
+#   - Included: top-level PERIOD guidance — total revenue, operating income
+#     (by basis), EPS, adjusted FCF, adjusted EBITDA — with an explicit fiscal
+#     period and a numeric point/range.
+#   - Excluded (an extractor emission here counts as a FALSE POSITIVE, which is
+#     the correct signal for a DCF-driving extractor): revenue SUB-SEGMENTS
+#     (e.g. PLTR "U.S. commercial revenue in excess of $X"), one-time charges
+#     (NET restructuring), long-term ASPIRATIONS (CVNA "13.5% by 2030-2035"),
+#     and operational metrics (unit counts, site counts).
+#   - basis: "total revenue" is recorded as GAAP (unqualified revenue is a GAAP
+#     measure by convention); items the filing labels "Non-GAAP"/"Adjusted" get
+#     non_gaap/adjusted. Adjusted FCF has no metric slot -> metric: other.
+#   - period format matches the extractor prompt: FY2026, Q2FY2026, etc.
+#   - CVNA Feb/Apr releases carry NO quantitative period guidance (qualitative
+#     only) -> zero gold entries; they test whether the extractor hallucinates.
+#
+# AUDIT LOG (2026-07-28, fix #2): revenue basis gaap -> unspecified, all 10
+# revenue entries. Justification (re-verified against each source EX-99.1):
+# every revenue figure is stated as plain "Revenue of between $X" (PLTR) or
+# "Total revenue of $X to $Y" (NET) with NO "GAAP"/"non-GAAP" qualifier in the
+# filing text -> faithful transcription is `unspecified`. The prior `gaap` was
+# an accounting inference beyond the text. Non-revenue bases are UNCHANGED
+# (op-income "Adjusted"/"Non-GAAP", eps "Non-GAAP", ebitda "Adjusted", FCF
+# "adjusted" all carry explicit qualifiers in-text). No revenue figure carried
+# a qualifier, so the change is applied uniformly and faithfully — not to make
+# figures pass.
+
+# ---- PLTR 0001321655-26-000026 (Q1 FY2026 release, 2026-05-04) ----
+- {ticker: PLTR, accession: "0001321655-26-000026", metric: revenue,          period: Q2FY2026, low: 1.797, high: 1.801, unit: usd_billions, basis: unspecified}
+- {ticker: PLTR, accession: "0001321655-26-000026", metric: operating_income, period: Q2FY2026, low: 1.063, high: 1.067, unit: usd_billions, basis: adjusted}
+- {ticker: PLTR, accession: "0001321655-26-000026", metric: revenue,          period: FY2026,   low: 7.650, high: 7.662, unit: usd_billions, basis: unspecified}
+- {ticker: PLTR, accession: "0001321655-26-000026", metric: operating_income, period: FY2026,   low: 4.440, high: 4.452, unit: usd_billions, basis: adjusted}
+- {ticker: PLTR, accession: "0001321655-26-000026", metric: other,            period: FY2026,   low: 4.2,   high: 4.4,   unit: usd_billions, basis: adjusted}
+
+# ---- PLTR 0001321655-26-000004 (Q4/FY2025 release, 2026-02-02) ----
+- {ticker: PLTR, accession: "0001321655-26-000004", metric: revenue,          period: Q1FY2026, low: 1.532, high: 1.536, unit: usd_billions, basis: unspecified}
+- {ticker: PLTR, accession: "0001321655-26-000004", metric: operating_income, period: Q1FY2026, low: 0.870, high: 0.874, unit: usd_billions, basis: adjusted}
+- {ticker: PLTR, accession: "0001321655-26-000004", metric: revenue,          period: FY2026,   low: 7.182, high: 7.198, unit: usd_billions, basis: unspecified}
+- {ticker: PLTR, accession: "0001321655-26-000004", metric: operating_income, period: FY2026,   low: 4.126, high: 4.142, unit: usd_billions, basis: adjusted}
+- {ticker: PLTR, accession: "0001321655-26-000004", metric: other,            period: FY2026,   low: 3.925, high: 4.125, unit: usd_billions, basis: adjusted}
+
+# ---- PLTR 0001321655-25-000130 (Q3 FY2025 release, 2025-11-03) ----
+- {ticker: PLTR, accession: "0001321655-25-000130", metric: revenue,          period: Q4FY2025, low: 1.327, high: 1.331, unit: usd_billions, basis: unspecified}
+- {ticker: PLTR, accession: "0001321655-25-000130", metric: operating_income, period: Q4FY2025, low: 0.695, high: 0.699, unit: usd_billions, basis: adjusted}
+- {ticker: PLTR, accession: "0001321655-25-000130", metric: revenue,          period: FY2025,   low: 4.396, high: 4.400, unit: usd_billions, basis: unspecified}
+- {ticker: PLTR, accession: "0001321655-25-000130", metric: operating_income, period: FY2025,   low: 2.151, high: 2.155, unit: usd_billions, basis: adjusted}
+- {ticker: PLTR, accession: "0001321655-25-000130", metric: other,            period: FY2025,   low: 1.9,   high: 2.1,   unit: usd_billions, basis: adjusted}
+
+# ---- NET 0001477333-26-000035 (Q1 FY2026 release, 2026-05-07) ----
+- {ticker: NET, accession: "0001477333-26-000035", metric: revenue,          period: Q2FY2026, low: 664.0,  high: 665.0,  unit: usd_millions,  basis: unspecified}
+- {ticker: NET, accession: "0001477333-26-000035", metric: operating_income, period: Q2FY2026, low: 90.0,   high: 91.0,   unit: usd_millions,  basis: non_gaap}
+- {ticker: NET, accession: "0001477333-26-000035", metric: eps,              period: Q2FY2026, low: 0.27,   high: 0.27,   unit: usd_per_share, basis: non_gaap}
+- {ticker: NET, accession: "0001477333-26-000035", metric: revenue,          period: FY2026,   low: 2805.0, high: 2813.0, unit: usd_millions,  basis: unspecified}
+- {ticker: NET, accession: "0001477333-26-000035", metric: operating_income, period: FY2026,   low: 418.0,  high: 421.0,  unit: usd_millions,  basis: non_gaap}
+- {ticker: NET, accession: "0001477333-26-000035", metric: eps,              period: FY2026,   low: 1.19,   high: 1.20,   unit: usd_per_share, basis: non_gaap}
+
+# ---- NET 0001477333-26-000008 (Q4/FY2025 release, 2026-02-10) ----
+- {ticker: NET, accession: "0001477333-26-000008", metric: revenue,          period: Q1FY2026, low: 620.0,  high: 621.0,  unit: usd_millions,  basis: unspecified}
+- {ticker: NET, accession: "0001477333-26-000008", metric: operating_income, period: Q1FY2026, low: 70.0,   high: 71.0,   unit: usd_millions,  basis: non_gaap}
+- {ticker: NET, accession: "0001477333-26-000008", metric: eps,              period: Q1FY2026, low: 0.23,   high: 0.23,   unit: usd_per_share, basis: non_gaap}
+- {ticker: NET, accession: "0001477333-26-000008", metric: revenue,          period: FY2026,   low: 2785.0, high: 2795.0, unit: usd_millions,  basis: unspecified}
+- {ticker: NET, accession: "0001477333-26-000008", metric: operating_income, period: FY2026,   low: 378.0,  high: 382.0,  unit: usd_millions,  basis: non_gaap}
+- {ticker: NET, accession: "0001477333-26-000008", metric: eps,              period: FY2026,   low: 1.11,   high: 1.12,   unit: usd_per_share, basis: non_gaap}
+
+# ---- CVNA 0001690820-25-000352 (Q3 2025 release, 2025-10-29) ----
+- {ticker: CVNA, accession: "0001690820-25-000352", metric: ebitda, period: FY2025, low: 2.0, high: 2.2, unit: usd_billions, basis: adjusted}
+
+# ---- CVNA 0001690820-26-000008 (2026-02-18) & 0001690820-26-000034 (2026-04-29) ----
+# No quantitative period guidance (qualitative only) -> intentionally zero gold
+# entries. Any figure the extractor emits for these accessions is a FALSE
+# POSITIVE (hallucination test).

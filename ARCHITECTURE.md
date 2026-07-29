@@ -452,6 +452,18 @@ INDEX (call_site, called_at)
 
 Cost discipline lives here. Weekly aggregation feeds `NOTES.md` §8. The `provider_switch` call_site is reserved for the OpenAI → Anthropic fallover event (zero tokens, zero cost, `status='info'`; `error_reason` records the triggering error).
 
+### DCF valuation tables (Subsystem 7, added 2026-07-27)
+
+Built for the event-driven revaluation layer (`src/redline/valuation/`, NOTES §6). No LLM calls — purely XBRL-driven.
+
+`xbrl_facts` — companyfacts ingestion sink, one row per (concept, period). `UNIQUE (cik, concept, fiscal_year, fiscal_period, period_start, period_end)` makes re-ingest idempotent (upsert refreshes the latest reported value). NOTE: the SEC `fiscal_year` column is the *filing's* year and bundles prior-year comparatives; annual values are resolved by `period_end` year + full-year span (see `fcf._annual_series_from_db`), not by that column.
+
+`dcf_valuations` — **append-only** valuation history (the deliberate break from latest-state storage; enables before/after). Columns: `id, cik, run_reason, trigger_accession, wacc, terminal_growth, assumptions_json, per_share_{bear,base,bull}, sensitivity_json, reference_price, reference_price_asof, model_version, valued_at, eval_run_id`. "Before" = prior row for the cik; "after" = the new row.
+
+`valuation_input_links` — audit trail: `valuation_id, input_name, old_value, new_value, source`. Records which real number moved which input on a new-filing revaluation.
+
+FCF-base validation eval writes to `eval_runs` under the `fcf_validation:<ticker>` event namespace — deliberately separate from the locked graded-12 (§4.5).
+
 ## §11 — Eval harness
 
 **Inputs:** `config/eval_events.yaml` — 12 entries, each with `id`, `ticker`, `filing_type`, `period`, `tests`, `pass_criteria`, `llm_judge_rubric`, `locked_at`.
