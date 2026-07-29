@@ -26,9 +26,8 @@ from redline.storage.db import connect
 
 # Names the DCF is credible for vs. monitored-only. Fixed here (presentation
 # policy), not inferred from data, so nothing off-method can slip into a card.
-VALUED = ["VRTX", "ULTA"]
-MONITORED = ["NET", "PLTR", "MRNA"]
-MECHANISM_TICKER = "NET"  # the guidance before/after "mechanism demo" name
+VALUED = ["VRTX", "ULTA"]  # the DCF-credible names shown as valuation cards
+MECHANISM_TICKER = "NET"   # the guidance before/after "mechanism demo" name
 # Named module constant, NOT config-model attribute access at import time: this
 # read-only app runs on Streamlit Cloud (cached venv), where reaching into a
 # freshly-added config field can crash on a stale install. Mirrors the default.
@@ -61,14 +60,21 @@ def _latest_valuation(conn, ticker: str) -> dict | None:
     return dict(row) if row else None
 
 
-def _company_name(conn, ticker: str) -> str:
-    row = conn.execute("SELECT name FROM watchlist WHERE ticker = ?", (ticker,)).fetchone()
-    return row["name"] if row else ticker
-
-
 def _bank_names(conn) -> list[dict]:
     return [dict(r) for r in conn.execute(
         "SELECT ticker, name FROM watchlist WHERE sector = 'financials' ORDER BY ticker")]
+
+
+def _monitored(conn) -> list[dict]:
+    """Non-financial watchlist names that don't get a DCF card (i.e. not in
+    VALUED). Derived from the watchlist — not a hand-maintained list — so every
+    watchlist company always lands in exactly one bucket (valued / monitored /
+    not-modeled) and none can silently drop off the page."""
+    ph = ",".join("?" * len(VALUED))
+    return [dict(r) for r in conn.execute(
+        f"SELECT ticker, name FROM watchlist "
+        f"WHERE sector != 'financials' AND ticker NOT IN ({ph}) ORDER BY ticker",
+        VALUED)]
 
 
 def _cik_for_ticker(conn, ticker: str) -> str | None:
@@ -204,8 +210,8 @@ def main() -> None:
 
     # --- Monitored, not valued ---
     st.subheader("Monitored — not DCF-valued")
-    for ticker in MONITORED:
-        st.markdown(f"- **{ticker} · {_company_name(conn, ticker)}** — high-multiple growth "
+    for m in _monitored(conn):
+        st.markdown(f"- **{m['ticker']} · {m['name']}** — high-multiple growth "
                     "or negative free cash flow; an FCF-DCF is not the right tool, so it is "
                     "monitored but not valued here.")
     for b in _bank_names(conn):
