@@ -19,4 +19,14 @@ def test_disclosure_dashboard_imports_clean():
 
 def test_valuation_dashboard_imports_clean():
     mod = importlib.import_module("redline.dashboard.valuation_app")
-    assert hasattr(mod, "main")
+    # multipage app: entrypoint + every page render function must be importable
+    for name in ("main", "page_overview", "page_valuations",
+                 "page_disclosure", "page_methodology"):
+        assert callable(getattr(mod, name)), name
+
+
+def test_dashboard_data_and_ui_import_clean():
+    data = importlib.import_module("redline.dashboard.data")
+    uimod = importlib.import_module("redline.dashboard.ui")
+    assert callable(data._flagged_filings)
+    assert callable(uimod.range_bar)

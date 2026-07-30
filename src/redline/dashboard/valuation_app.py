@@ -20,10 +20,11 @@ import datetime
 import json
 import os
 import sqlite3
+from pathlib import Path
 
 import streamlit as st
 
-from redline.dashboard import ui
+from redline.dashboard import data, ui
 from redline.storage.db import connect
 
 # Names the DCF is credible for vs. monitored-only. Fixed here (presentation
@@ -280,26 +281,55 @@ def _valuation_card(v: dict, ticker: str) -> None:
 # Page
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    st.set_page_config(page_title="Redline · DCF valuations", layout="wide")
-    conn = _conn()
+_EDGAR_APP_URL = "https://redline-edgar.streamlit.app/"
 
-    st.title("Redline — event-driven DCF valuations")
+
+def page_overview() -> None:
+    conn = _conn()
+    st.title("Redline — event-driven filing analysis")
+    st.markdown(
+        "_A scheduled SEC EDGAR monitor for a fixed 8-ticker watchlist: it detects "
+        "substantive quarter-over-quarter disclosure changes, correlates Form 4 insider "
+        "trades against filings, and rebuilds a DCF valuation from the numbers in each "
+        "filing — surfacing information, not trade signals._"
+    )
+    banks = _bank_names(conn)
+    monitored = _monitored(conn)
+    cols = st.columns(4)
+    cols[0].metric("Companies", "8")
+    cols[1].metric("DCF-valued", len(VALUED))
+    cols[2].metric("Monitored", len(monitored))
+    cols[3].metric("Not modeled", len(banks))
+
+    wl = data._watchlist(conn)
+    if wl:
+        st.altair_chart(ui.watchlist_by_sector(wl), use_container_width=True)
+
+    st.markdown(
+        "**How the watchlist is treated.** DCF valuations are shown only for "
+        f"cash-generative businesses where the method applies (**{', '.join(VALUED)}**). "
+        "High-multiple growth / turnaround names are **monitored, not valued** (an "
+        "FCF-DCF is the wrong tool for them), and financial-sector names are **not "
+        "DCF-modeled**. That judgment — using the right tool per business — is the point."
+    )
+    st.info(
+        "Not real-time, not a sentiment tool, not an alpha generator. Scheduled "
+        "monitoring and analyst-style revaluation; every number traces to a filing.",
+        icon="🎯",
+    )
+    st.caption(f"Companion disclosure monitor: [{_EDGAR_APP_URL}]({_EDGAR_APP_URL})")
+
+
+def page_valuations() -> None:
+    conn = _conn()
+    st.title("DCF valuations")
     st.markdown(
         "When a company files with the SEC, Redline rebuilds a discounted-cash-flow "
         "estimate from the numbers **in the filing itself** — reported financials and "
         "stated guidance — and logs how the estimate moved."
     )
-    st.info(
-        "DCF valuations are shown for **cash-generative businesses where the method "
-        "applies**. High-multiple growth, turnaround, and financial-sector names are "
-        "**monitored but not DCF-valued** — an FCF-DCF isn't the right tool for them.",
-        icon="🎯",
-    )
     st.divider()
 
-    # --- Hero: the two DCF-credible valuations ---
-    st.subheader("Valuations")
     for ticker in VALUED:
         v = _latest_valuation(conn, ticker)
         if v:
@@ -307,8 +337,6 @@ def main() -> None:
             st.write("")
 
     st.divider()
-
-    # --- Mechanism demonstration (explicitly labeled; not a NET valuation) ---
     st.subheader("How a filing moves the model")
     m = _net_mechanism(conn)
     if m:
@@ -332,19 +360,82 @@ def main() -> None:
                        "mechanism. No absolute NET valuation is shown; this is not a price target.")
 
     st.divider()
-
-    # --- Monitored, not valued ---
     st.subheader("Monitored — not DCF-valued")
-    for m in _monitored(conn):
-        st.markdown(f"- **{m['ticker']} · {m['name']}** — high-multiple growth "
+    for mm in _monitored(conn):
+        st.markdown(f"- **{mm['ticker']} · {mm['name']}** — high-multiple growth "
                     "or negative free cash flow; an FCF-DCF is not the right tool, so it is "
                     "monitored but not valued here.")
     for b in _bank_names(conn):
         st.markdown(f"- **{b['ticker']} · {b['name']}** — not DCF-modeled (financial sector).")
-
-    st.divider()
     st.caption("Read-only demonstration on a curated snapshot. Informational only; not "
                "investment advice.")
+
+
+def page_disclosure() -> None:
+    conn = _conn()
+    st.title("Disclosure monitor")
+    st.markdown(
+        "Substantive quarter-over-quarter changes in 10-K / 10-Q disclosures (via a "
+        "three-stage diff filter) and unusual Form 4 insider trading, joined on a "
+        "±14-day window."
+    )
+    findings = data._flagged_filings(
+        conn, ticker=None, filing_type=None, flag_reason=None,
+        min_materiality=0.0, limit=data._EVENT_LIMIT,
+    )
+    if not findings:
+        st.info(
+            f"The full interactive disclosure monitor runs as a dedicated app: "
+            f"[{_EDGAR_APP_URL}]({_EDGAR_APP_URL}).",
+            icon="🔎",
+        )
+        return
+    mats = [f["materiality_max"] for f in findings if f["materiality_max"] is not None]
+    if mats:
+        st.altair_chart(ui.materiality_hist(mats), use_container_width=True)
+    for f in findings:
+        summaries = data._diff_summaries_for_event(conn, f["event_id"])
+        payload = data._correlator_payload(conn, f["event_id"])
+        headline = data._synthesize_headline(f, summaries, payload)
+        sev, _ = data._severity(f["materiality_max"])
+        disp, _stale = data._humanize_date(f.get("flagged_at"))
+        st.markdown(
+            f"**{f['ticker']} · {data._humanize_filing_type(f['filing_type'])}** — "
+            f"{headline}  \n_{sev} · {disp} · "
+            f"{data._humanize_flag_reason(f['flag_reason'])}_"
+        )
+    st.caption(f"Full interactive monitor: [{_EDGAR_APP_URL}]({_EDGAR_APP_URL}).")
+
+
+def page_methodology() -> None:
+    st.title("Methodology & eval")
+    st.markdown(
+        "**Pipeline.** Poll EDGAR (15-min cadence) → parse 10-K/10-Q/8-K/Form 4 → "
+        "three-stage diff filter (deterministic rules → cheap-LLM gate → quality-LLM "
+        "summary) → Form 4 correlator (10b5-1 plan trades excluded) → event-driven DCF "
+        "revaluation from XBRL financials + 8-K guidance. Read-only dashboards over a "
+        "curated SQLite snapshot; every LLM call is logged and Pydantic-validated.\n\n"
+        "**Honest framing.** Scheduled monitoring, not real-time; information surfacing, "
+        "not trade signals. DCF covers only names where unlevered-FCF DCF applies."
+    )
+    st.divider()
+    st.subheader("Eval results")
+    eval_md = Path("EVAL.md")
+    if eval_md.exists():
+        st.markdown(eval_md.read_text(encoding="utf-8"))
+    else:
+        st.caption("EVAL.md not found in this deployment.")
+
+
+def main() -> None:
+    st.set_page_config(page_title="Redline · filing analysis", layout="wide")
+    nav = st.navigation([
+        st.Page(page_overview, title="Overview", icon="🏠", default=True),
+        st.Page(page_valuations, title="Valuations", icon="📊"),
+        st.Page(page_disclosure, title="Disclosure monitor", icon="🔎"),
+        st.Page(page_methodology, title="Methodology & eval", icon="📋"),
+    ])
+    nav.run()
 
 
 if __name__ == "__main__":
