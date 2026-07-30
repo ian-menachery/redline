@@ -1,8 +1,9 @@
 # Spike-phase dependencies (Phase 0.5).
 # Graduate to pyproject.toml at Phase 1 start.
-# Rev 2026-07-30: dashboards now import redline.dashboard.ui (Altair charts);
-# this comment bump forces Streamlit Cloud to reinstall the editable package so
-# the new module is present on redeploy.
+# Rev 2026-07-30: dashboards now import redline.dashboard.ui (Altair charts) and
+# redline.dashboard.data (shared query layer); these comment bumps force
+# Streamlit Cloud to reinstall the editable package so new modules deploy.
+# Rev 2026-07-30b: added redline.dashboard.data.
 
 # Install the local redline package itself (src-layout). Streamlit Cloud
 # runs `pip install -r requirements.txt` and would otherwise fail at
