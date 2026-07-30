@@ -56,7 +56,22 @@ def test_form4_timeline_and_empty():
 
 
 def test_pipeline_funnel():
-    _ok(ui.pipeline_funnel([("fetched", 8), ("parsed", 8), ("analyzed", 6), ("flagged", 3)]))
+    _ok(ui.pipeline_funnel([("Fetched", 8), ("Parsed", 8), ("Analyzed", 6), ("Flagged", 3)]))
+
+
+def test_page_css_is_style_block():
+    css = ui.page_css()
+    assert css.strip().startswith("<style>") and css.strip().endswith("</style>")
+    # one shared severity/chip system + the chart font, so both apps read alike
+    for token in ("severity-major", "severity-notable", "topic-chip", "Inter"):
+        assert token in css
+
+
+def test_chart_unit_labels_present():
+    # units/scale must be explicit, not bare "$"
+    spec = ui.chart_to_spec(ui.fcf_projection(_PROJ))
+    assert "Amount (USD)" in str(spec)
+    assert "Materiality (0" in str(ui.chart_to_spec(ui.materiality_hist([0.5])))
 
 
 def test_watchlist_by_sector_and_empty():

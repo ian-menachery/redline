@@ -25,6 +25,41 @@ CATEGORICAL = ["#0072B2", "#E69F00", "#009E73", "#CC79A7", "#56B4E9"]
 _FONT = "Inter, -apple-system, Segoe UI, sans-serif"
 
 
+def page_css() -> str:
+    """Shared page CSS for both dashboards — one font, one severity/chip system,
+    consistent spacing. Kept here (a module both apps already import) rather than
+    a new module, so adding it needs no ``requirements.txt`` bump on Streamlit
+    Cloud. Severity accents are drawn from the same navy/Okabe-Ito family as the
+    charts so pills and plots read as one system; ``#eef1f5`` matches the theme's
+    ``secondaryBackgroundColor``."""
+    return """
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  html, body, [class*="css"], .stMarkdown, .stMetric, .stDataFrame {
+    font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  }
+  .severity-pill {
+    display: inline-block; padding: 2px 10px; border-radius: 4px;
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; margin-right: 10px; vertical-align: middle;
+  }
+  .severity-major   { background: #f7e4e0; color: #b23524; border: 1px solid #e0a99f; }
+  .severity-notable { background: #fbf0dd; color: #8a5a08; border: 1px solid #e3c489; }
+  .severity-minor   { background: #eef1f5; color: #1e3a5f; border: 1px solid #cfd8dc; }
+  .severity-routine { background: #eef1f5; color: #4a5b6a; border: 1px solid #cfd8dc; }
+  .topic-chip {
+    display: inline-block; background: #eef1f5; color: #1f2933;
+    border: 1px solid #cfd8dc; padding: 2px 10px; border-radius: 12px;
+    font-size: 0.78rem; margin: 3px 4px 3px 0;
+  }
+  .meta-row { color: #5d6d7e; font-size: 0.85rem; margin-top: 4px; margin-bottom: 6px; }
+  .meta-row strong { color: #1f2933; }
+  .stMetric { padding-top: 0.25rem; }
+  hr { border-color: #d6dbe0 !important; }
+</style>
+"""
+
+
 def _themed(chart: Any, *, height: int = 240) -> alt.Chart:
     """Apply recessive grid / clean axes / consistent type to any chart
     (``Chart`` or ``LayerChart`` — Altair's ``.configure_*`` live on both)."""
@@ -78,12 +113,12 @@ def fcf_projection(projection: list[dict]) -> alt.Chart:
     chart = alt.Chart(alt.Data(values=rows)).mark_bar(cornerRadius=3).encode(
         x=alt.X("year:O", title="Projection year"),
         xOffset="series:N",
-        y=alt.Y("value:Q", title="$"),
+        y=alt.Y("value:Q", title="Amount (USD)"),
         color=alt.Color("series:N", title=None,
                         scale=alt.Scale(domain=["Free cash flow", "PV of FCF"],
                                         range=CATEGORICAL[:2])),
         tooltip=[alt.Tooltip("year:O", title="Year"), "series:N",
-                 alt.Tooltip("value:Q", title="$", format="$,.0f")],
+                 alt.Tooltip("value:Q", title="Amount", format="$,.0f")],
     )
     return _themed(chart.properties(title="Free-cash-flow projection"))
 
@@ -137,7 +172,7 @@ def materiality_hist(materialities: list[float]) -> alt.Chart:
     rows = [{"m": m} for m in materialities if m is not None]
     chart = alt.Chart(alt.Data(values=rows or [{"m": 0}])).mark_bar(
         color=NAVY, cornerRadius=2, opacity=0.85).encode(
-        x=alt.X("m:Q", bin=alt.Bin(maxbins=10), title="Materiality"),
+        x=alt.X("m:Q", bin=alt.Bin(maxbins=10), title="Materiality (0–1)"),
         y=alt.Y("count():Q", title="Findings"),
         tooltip=[alt.Tooltip("count():Q", title="Findings")],
     )

@@ -55,57 +55,10 @@ def _conn() -> sqlite3.Connection:
 # CSS
 # ---------------------------------------------------------------------------
 
-_CSS = """
-<style>
-  /* Severity pills */
-  .severity-pill {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 4px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    margin-right: 10px;
-    vertical-align: middle;
-  }
-  .severity-major   { background: #fbecec; color: #a02519; border: 1px solid #d99494; }
-  .severity-notable { background: #fdf4e7; color: #8a5a08; border: 1px solid #d9b27a; }
-  .severity-minor   { background: #e3e8ec; color: #34495e; border: 1px solid #95a5b3; }
-  .severity-routine { background: #ebeef1; color: #4a5b6a; border: 1px solid #a8b5be; }
-
-  /* Topic chips */
-  .topic-chip {
-    display: inline-block;
-    background: #eef1f5;
-    color: #1f2933;
-    border: 1px solid #cfd8dc;
-    padding: 2px 10px;
-    border-radius: 12px;
-    font-size: 0.78rem;
-    margin: 3px 4px 3px 0;
-  }
-
-  /* Card meta row */
-  .meta-row {
-    color: #5d6d7e;
-    font-size: 0.85rem;
-    margin-top: 4px;
-    margin-bottom: 6px;
-  }
-  .meta-row strong { color: #1f2933; }
-
-  /* Tighten header spacing */
-  .stMetric { padding-top: 0.25rem; }
-
-  /* Subdued divider */
-  hr { border-color: #d6dbe0 !important; }
-</style>
-"""
-
-
 def _inject_css() -> None:
-    st.markdown(_CSS, unsafe_allow_html=True)
+    # Shared theme (font + severity pills + chips + spacing) lives in ui.py so
+    # both dashboards render as one system. See ui.page_css().
+    st.markdown(ui.page_css(), unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -113,12 +66,16 @@ def _inject_css() -> None:
 # ---------------------------------------------------------------------------
 
 def _render_hero(conn: sqlite3.Connection) -> None:
-    st.markdown("# redline")
+    st.title("Redline")
     st.markdown(
         "_Scheduled SEC filing monitor. Watches 8 public companies for "
         "substantive disclosure changes and unusual insider-trading patterns._"
     )
 
+    total = conn.execute("SELECT COUNT(*) AS n FROM filings_seen").fetchone()["n"]
+    parsed_plus = conn.execute(
+        "SELECT COUNT(*) AS n FROM filings_seen WHERE status IN ('parsed', 'analyzed', 'flagged')"
+    ).fetchone()["n"]
     analyzed = conn.execute(
         "SELECT COUNT(*) AS n FROM filings_seen WHERE status IN ('analyzed', 'flagged')"
     ).fetchone()["n"]
@@ -127,16 +84,30 @@ def _render_hero(conn: sqlite3.Connection) -> None:
     ).fetchone()["n"]
 
     cols = st.columns(3)
-    cols[0].metric("Companies monitored", "8")
-    cols[1].metric("Filings analyzed", analyzed)
-    cols[2].metric("Findings", flagged_distinct)
+    cols[0].metric("Companies monitored", "8",
+                   help="Fixed 8-ticker watchlist across four sectors.")
+    cols[1].metric("Filings analyzed", analyzed,
+                   help="Filings that completed the parse → diff → analyze pipeline.")
+    cols[2].metric("Findings", flagged_distinct,
+                   help="Distinct filings flagged for a material change or insider anomaly.")
 
     materialities = [
         r["m"] for r in conn.execute(
             "SELECT materiality_max AS m FROM flagged_events WHERE materiality_max IS NOT NULL")
     ]
-    if materialities:
-        st.altair_chart(ui.materiality_hist(materialities), use_container_width=True)
+    left, right = st.columns(2)
+    with left:
+        # Cumulative reached-stage counts → a monotonic funnel.
+        st.altair_chart(
+            ui.pipeline_funnel([
+                ("Fetched", total), ("Parsed", parsed_plus),
+                ("Analyzed", analyzed), ("Flagged", flagged_distinct),
+            ]),
+            use_container_width=True,
+        )
+    with right:
+        if materialities:
+            st.altair_chart(ui.materiality_hist(materialities), use_container_width=True)
 
     with st.expander("About this project"):
         st.markdown(
@@ -163,7 +134,7 @@ def _render_hero(conn: sqlite3.Connection) -> None:
 # ---------------------------------------------------------------------------
 
 def _render_sidebar(conn: sqlite3.Connection) -> dict:
-    st.sidebar.markdown("## redline")
+    st.sidebar.markdown("## Redline")
 
     # Pipeline status
     total = conn.execute("SELECT COUNT(*) AS n FROM filings_seen").fetchone()["n"]
@@ -324,7 +295,7 @@ def _render_finding_card(conn: sqlite3.Connection, event: dict) -> None:
             mcol[1].markdown(f"**Filed**\n\n{abs_date}" + (f" · {rel_date}" if rel_date else ""))
             mcol[2].markdown(f"**Period**\n\n{event.get('period_end') or '—'}")
             st.markdown(
-                f"[Open this filing on EDGAR ↗]({_edgar_url(accession, event['cik'])})"
+                f"[Open this filing on EDGAR]({_edgar_url(accession, event['cik'])})"
             )
 
             # What changed
@@ -362,48 +333,48 @@ def _render_finding_card(conn: sqlite3.Connection, event: dict) -> None:
                 v = payload.get("verdict") or {}
                 st.markdown("#### Insider-trading signal")
                 ic = st.columns(3)
-                ic[0].metric("Anomalous", "Yes" if v.get("anomalous") else "No")
+                ic[0].metric("Anomalous", "Yes" if v.get("anomalous") else "No",
+                             help="Whether the Form 4 pattern near this filing was flagged "
+                                  "as anomalous after excluding 10b5-1 plan trades.")
                 ic[1].metric(
                     "Confidence",
-                    f"{v.get('confidence', 0):.2f}" if v.get("confidence") is not None else "—",
+                    f"{v.get('confidence', 0):.0%}" if v.get("confidence") is not None else "—",
+                    help="Model confidence in the anomaly assessment.",
                 )
                 cluster_size = (payload.get("cluster") or {}).get("max_cluster_size", 0)
-                ic[2].metric("Cluster size", cluster_size)
+                ic[2].metric("Largest trade cluster", cluster_size,
+                             help="Most insider transactions clustered within the window.")
                 drivers = v.get("drivers") or []
                 if drivers:
                     st.markdown("**Specific signals identified:**")
                     for d in drivers:
                         st.markdown(f"- {d}")
 
-            # Technical detail (nested)
-            with st.expander("Technical detail — raw chunks, gate decisions, transactions"):
+            # Underlying detail (nested)
+            with st.expander("Underlying analysis"):
                 stage2 = _diff_results(conn, accession=accession, stage=2)
                 if stage2:
                     st.markdown(
-                        "**Stage 1 chunks the diff filter saw, and the Stage 2 gate's decision** "
-                        f"({len(stage2)} total)"
+                        "**Section-by-section changes reviewed, and why each was kept "
+                        f"or set aside** ({len(stage2)} total)"
                     )
                     for row in stage2:
                         decision = (
                             json.loads(row["gate_decision"]) if row["gate_decision"] else {}
                         )
-                        badge = (
-                            "✓ substantive" if decision.get("substantive") else "× cosmetic"
+                        verdict = (
+                            "Substantive" if decision.get("substantive") else "Cosmetic"
                         )
                         st.markdown(
-                            f"**{_humanize_section(row['section'])}** · {badge} "
+                            f"**{_humanize_section(row['section'])}** · {verdict} "
                             f"— _{decision.get('reason', '')}_"
                         )
                         cols = st.columns(2)
-                        cols[0].markdown("_OLD_")
+                        cols[0].markdown("_Previous filing_")
                         cols[0].text(row["chunk_old"] or "(empty)")
-                        cols[1].markdown("_NEW_")
+                        cols[1].markdown("_This filing_")
                         cols[1].text(row["chunk_new"] or "(empty)")
                         st.divider()
-
-                if payload:
-                    st.markdown("**Correlator raw payload**")
-                    st.json(payload, expanded=False)
 
                 txs = _form4_transactions_in_window(
                     conn, cik=event["cik"],
@@ -411,11 +382,24 @@ def _render_finding_card(conn: sqlite3.Connection, event: dict) -> None:
                 )
                 if txs:
                     st.markdown(
-                        f"**Form 4 transactions in ±{_FORM4_WINDOW_DAYS}d window** "
+                        f"**Insider (Form 4) transactions within ±{_FORM4_WINDOW_DAYS} days** "
                         f"({len(txs)} total)"
                     )
                     st.altair_chart(ui.form4_timeline(txs), use_container_width=True)
-                    st.dataframe(txs, use_container_width=True, hide_index=True)
+                    st.dataframe(
+                        [
+                            {
+                                "Date": t.get("trade_date"),
+                                "Insider": t.get("insider_name") or "—",
+                                "Side": {"P": "Buy", "S": "Sell"}.get(
+                                    str(t.get("code") or ""), str(t.get("code") or "—")),
+                                "Shares": f"{float(t.get('shares') or 0):,.0f}",
+                                "10b5-1 plan": "Yes" if t.get("is_10b5_1") else "No",
+                            }
+                            for t in txs
+                        ],
+                        use_container_width=True, hide_index=True,
+                    )
 
 
 # ---------------------------------------------------------------------------
@@ -427,7 +411,7 @@ _SEVERITY_RANK = {"major": 0, "notable": 1, "minor": 2, "routine": 3}
 
 def main() -> None:
     st.set_page_config(
-        page_title="redline · SEC filing monitor",
+        page_title="Redline · SEC filing monitor",
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -448,12 +432,13 @@ def main() -> None:
     events = _flagged_filings(conn, **filters)
 
     if not events:
-        st.info(
-            "**No findings match the current filters.**\n\n"
-            "Try widening the search: lower the minimum severity, switch to "
-            "**All companies**, or set the filing type back to **All filings**. "
-            "The default view (no filters applied) shows every flagged event."
-        )
+        with st.container(border=True):
+            st.markdown(
+                "**No findings match the current filters.**\n\n"
+                "Try widening the search: lower the minimum severity, switch to "
+                "**All companies**, or set the filing type back to **All filings**. "
+                "The default view (no filters applied) shows every flagged event."
+            )
         return
 
     # Sort by severity then most-recent flagged_at first.
@@ -463,7 +448,7 @@ def main() -> None:
         events, key=lambda e: _SEVERITY_RANK[_severity(e["materiality_max"])[1]]
     )
 
-    st.markdown(f"### Findings ({len(events_sorted)})")
+    st.subheader(f"Findings ({len(events_sorted)})")
     for event in events_sorted:
         _render_finding_card(conn, event)
 

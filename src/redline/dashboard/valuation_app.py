@@ -251,30 +251,35 @@ def _render_model_detail(d: dict) -> None:
 
 
 def _valuation_card(v: dict, ticker: str) -> None:
-    st.markdown(f"#### {ticker} · {v['company']}")
-    cols = st.columns(3)
-    cols[0].metric("Conservative", f"${v['bear']:,.0f}")
-    cols[1].metric("Base case", f"${v['base']:,.0f}")
-    cols[2].metric("Optimistic", f"${v['bull']:,.0f}")
-    ref, asof = v.get("ref"), v.get("asof")
-    if ref:
-        disp, stale = _fmt_asof(asof)
-        suffix = f"reference price ${ref:,.2f} (as of {disp})"
-        if stale:
-            st.caption(f":grey[{suffix} — reference may be stale]")
-        else:
-            st.caption(f"Estimated value range vs. {suffix}.")
-    st.caption("A modeled range from the company's own reported cash flows — not a recommendation.")
-    if v.get("bear") is not None:
-        st.altair_chart(
-            ui.range_bar(ticker=ticker, bear=v["bear"], base=v["base"],
-                         bull=v["bull"], reference=v.get("ref")),
-            use_container_width=True,
-        )
-    detail = _model_detail(v)
-    if detail:
-        with st.expander("How this was modeled"):
-            _render_model_detail(detail)
+    with st.container(border=True):
+        st.markdown(f"**{ticker}** · {v['company']}")
+        cols = st.columns(3)
+        cols[0].metric("Conservative", f"${v['bear']:,.0f}",
+                       help="Bear-case per-share estimate (low end of the modeled range).")
+        cols[1].metric("Base case", f"${v['base']:,.0f}",
+                       help="Central per-share estimate from the base-case assumptions.")
+        cols[2].metric("Optimistic", f"${v['bull']:,.0f}",
+                       help="Bull-case per-share estimate (high end of the modeled range).")
+        ref, asof = v.get("ref"), v.get("asof")
+        if ref:
+            disp, stale = _fmt_asof(asof)
+            suffix = f"reference price ${ref:,.2f} (as of {disp})"
+            if stale:
+                st.caption(f":grey[{suffix} — reference may be stale]")
+            else:
+                st.caption(f"Estimated value range vs. {suffix}.")
+        st.caption("A modeled range from the company's own reported cash flows — "
+                   "not a recommendation.")
+        if v.get("bear") is not None:
+            st.altair_chart(
+                ui.range_bar(ticker=ticker, bear=v["bear"], base=v["base"],
+                             bull=v["bull"], reference=v.get("ref")),
+                use_container_width=True,
+            )
+        detail = _model_detail(v)
+        if detail:
+            with st.expander("How this was modeled"):
+                _render_model_detail(detail)
 
 
 # ---------------------------------------------------------------------------
@@ -296,10 +301,13 @@ def page_overview() -> None:
     banks = _bank_names(conn)
     monitored = _monitored(conn)
     cols = st.columns(4)
-    cols[0].metric("Companies", "8")
-    cols[1].metric("DCF-valued", len(VALUED))
-    cols[2].metric("Monitored", len(monitored))
-    cols[3].metric("Not modeled", len(banks))
+    cols[0].metric("Companies", "8", help="Fixed watchlist size — quality over coverage.")
+    cols[1].metric("DCF-valued", len(VALUED),
+                   help="Names where an unlevered-FCF DCF is the right tool.")
+    cols[2].metric("Monitored", len(monitored),
+                   help="Tracked, but an FCF-DCF does not apply — not valued here.")
+    cols[3].metric("Not modeled", len(banks),
+                   help="Financial-sector names; a levered/DDM model is required, not built.")
 
     wl = data._watchlist(conn)
     if wl:
@@ -312,11 +320,12 @@ def page_overview() -> None:
         "FCF-DCF is the wrong tool for them), and financial-sector names are **not "
         "DCF-modeled**. That judgment — using the right tool per business — is the point."
     )
-    st.info(
-        "Not real-time, not a sentiment tool, not an alpha generator. Scheduled "
-        "monitoring and analyst-style revaluation; every number traces to a filing.",
-        icon="🎯",
-    )
+    with st.container(border=True):
+        st.markdown(
+            "**What this is.** Scheduled monitoring and analyst-style revaluation — "
+            "not real-time, not a sentiment tool, not an alpha generator. Every number "
+            "traces to a filing."
+        )
     st.caption(f"Companion disclosure monitor: [{_EDGAR_APP_URL}]({_EDGAR_APP_URL})")
 
 
@@ -334,7 +343,6 @@ def page_valuations() -> None:
         v = _latest_valuation(conn, ticker)
         if v:
             _valuation_card(v, ticker)
-            st.write("")
 
     st.divider()
     st.subheader("How a filing moves the model")
@@ -355,7 +363,9 @@ def page_valuations() -> None:
             st.markdown(f"[View the source 8-K on SEC EDGAR]({_edgar_url(m['accession'])})")
         with c2:
             st.metric("Effect on the modeled estimate",
-                      f"{(m['after'] / m['before'] - 1):+.1%}")
+                      f"{(m['after'] / m['before'] - 1):+.1%}",
+                      help="Relative change in the base-case estimate after the filing's "
+                           "guidance updated the model's year-1 revenue growth.")
             st.caption("How much the estimate moved after the filing — an illustrative "
                        "mechanism. No absolute NET valuation is shown; this is not a price target.")
 
@@ -384,10 +394,9 @@ def page_disclosure() -> None:
         min_materiality=0.0, limit=data._EVENT_LIMIT,
     )
     if not findings:
-        st.info(
+        st.markdown(
             f"The full interactive disclosure monitor runs as a dedicated app: "
-            f"[{_EDGAR_APP_URL}]({_EDGAR_APP_URL}).",
-            icon="🔎",
+            f"[{_EDGAR_APP_URL}]({_EDGAR_APP_URL})."
         )
         return
     mats = [f["materiality_max"] for f in findings if f["materiality_max"] is not None]
@@ -428,12 +437,14 @@ def page_methodology() -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Redline · filing analysis", layout="wide")
+    st.set_page_config(page_title="Redline · filing analysis", layout="wide",
+                       initial_sidebar_state="expanded")
+    st.markdown(ui.page_css(), unsafe_allow_html=True)
     nav = st.navigation([
-        st.Page(page_overview, title="Overview", icon="🏠", default=True),
-        st.Page(page_valuations, title="Valuations", icon="📊"),
-        st.Page(page_disclosure, title="Disclosure monitor", icon="🔎"),
-        st.Page(page_methodology, title="Methodology & eval", icon="📋"),
+        st.Page(page_overview, title="Overview", default=True),
+        st.Page(page_valuations, title="Valuations"),
+        st.Page(page_disclosure, title="Disclosure monitor"),
+        st.Page(page_methodology, title="Methodology & eval"),
     ])
     nav.run()
 
