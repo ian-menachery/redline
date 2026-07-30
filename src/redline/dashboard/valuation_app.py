@@ -23,6 +23,7 @@ import sqlite3
 
 import streamlit as st
 
+from redline.dashboard import ui
 from redline.storage.db import connect
 
 # Names the DCF is credible for vs. monitored-only. Fixed here (presentation
@@ -211,6 +212,7 @@ def _render_model_detail(d: dict) -> None:
         st.caption(f"Note: {d['low_confidence_note']}")
 
     st.markdown("**Base-case free-cash-flow projection**")
+    st.altair_chart(ui.fcf_projection(d["projection"]), use_container_width=True)
     st.dataframe(
         [
             {
@@ -234,26 +236,15 @@ def _render_model_detail(d: dict) -> None:
         f"base per share. Terminal value is {br['terminal_value_fraction']:.0%} "
         f"of enterprise value."
     )
+    st.altair_chart(ui.ev_split(br), use_container_width=True)
 
     sens = d.get("sensitivity") or {}
-    wacc_pts = sens.get("wacc") or []
-    growth_pts = sens.get("revenue_growth_shift") or []
-    if wacc_pts or growth_pts:
+    if sens.get("wacc") or sens.get("revenue_growth_shift"):
         st.markdown("**Sensitivity** (per-share value)")
-        cols = st.columns(2)
-        if wacc_pts:
-            cols[0].caption("By WACC")
-            cols[0].dataframe(
-                [{"WACC": f"{w:.1%}", "Per share": f"${ps:,.0f}"} for w, ps in wacc_pts],
-                hide_index=True, use_container_width=True,
-            )
-        if growth_pts:
-            cols[1].caption("By revenue-growth shift")
-            cols[1].dataframe(
-                [{"Growth shift": f"{g:+.1%}", "Per share": f"${ps:,.0f}"}
-                 for g, ps in growth_pts],
-                hide_index=True, use_container_width=True,
-            )
+        st.altair_chart(
+            ui.sensitivity_tornado(sens, base_per_share=br["per_share"]),
+            use_container_width=True,
+        )
     st.caption("Modeled from the company's own reported cash flows — illustrative, "
                "not a recommendation.")
 
@@ -273,6 +264,12 @@ def _valuation_card(v: dict, ticker: str) -> None:
         else:
             st.caption(f"Estimated value range vs. {suffix}.")
     st.caption("A modeled range from the company's own reported cash flows — not a recommendation.")
+    if v.get("bear") is not None:
+        st.altair_chart(
+            ui.range_bar(ticker=ticker, bear=v["bear"], base=v["base"],
+                         bull=v["bull"], reference=v.get("ref")),
+            use_container_width=True,
+        )
     detail = _model_detail(v)
     if detail:
         with st.expander("How this was modeled"):
