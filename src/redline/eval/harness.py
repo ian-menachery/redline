@@ -171,10 +171,23 @@ def main(argv: list[str] | None = None) -> int:
                         help="Disable LLM-judge fallback (binary-only grading).")
     parser.add_argument("--settings", default="config/settings.toml")
     parser.add_argument("--events-file", default="config/eval_events.yaml")
+    parser.add_argument(
+        "--db-path",
+        help="Run against this DB instead of settings.storage.db_path. Use an "
+             "isolated throwaway file (e.g. data/eval_run.db) for a deterministic "
+             "run whose grades don't depend on prior live-DB state.",
+    )
+    parser.add_argument(
+        "--fresh", action="store_true",
+        help="Delete --db-path first so the run starts from an empty, "
+             "freshly-seeded DB (deterministic). Requires --db-path.",
+    )
     args = parser.parse_args(argv)
 
     if not args.all and not args.event:
         parser.error("Pass --all or one or more --event <id>.")
+    if args.fresh and not args.db_path:
+        parser.error("--fresh requires --db-path (refusing to wipe the default DB).")
 
     logging.basicConfig(
         level=logging.INFO,
@@ -203,10 +216,19 @@ def main(argv: list[str] | None = None) -> int:
             events.append(by_id[eid])
 
     from redline.storage.db import open_db
-    from redline.storage.schema import init_full_schema
+    from redline.storage.schema import init_full_schema, seed_watchlist_from_yaml
 
-    with open_db(config.storage.db_path) as conn:
+    db_path = args.db_path or config.storage.db_path
+    if args.fresh:
+        for p in (Path(db_path), Path(f"{db_path}-wal"), Path(f"{db_path}-shm")):
+            p.unlink(missing_ok=True)
+
+    with open_db(db_path) as conn:
         init_full_schema(conn)
+        # An isolated eval DB needs the watchlist seeded before replay can join
+        # filings to tickers. Idempotent: existing rows are left untouched.
+        if args.db_path:
+            seed_watchlist_from_yaml(conn, "config/watchlist.yaml")
         client = LLMClient(config, conn)
         scorecard = run(
             config, conn, client,
