@@ -1,14 +1,21 @@
-# redline
+# Redline
 
-[![CI](https://github.com/ian-menachery/redline/actions/workflows/ci.yml/badge.svg)](https://github.com/ian-menachery/redline/actions/workflows/ci.yml) ![tests](https://img.shields.io/badge/tests-223%20passing-2c7a3f) ![coverage](https://img.shields.io/badge/coverage-%E2%89%A570%25-2c7a3f) ![python](https://img.shields.io/badge/python-3.11%2B-3776ab) ![ruff](https://img.shields.io/badge/lint-ruff-261230) ![mypy](https://img.shields.io/badge/types-mypy-2a6db2) ![llm](https://img.shields.io/badge/llm-OpenAI%20%2B%20Anthropic-1e3a5f) ![dashboard](https://img.shields.io/badge/dashboard-Streamlit-ff4b4b) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
+[![CI](https://github.com/ian-menachery/redline/actions/workflows/ci.yml/badge.svg)](https://github.com/ian-menachery/redline/actions/workflows/ci.yml) ![tests](https://img.shields.io/badge/tests-242%20passing-2c7a3f) ![coverage](https://img.shields.io/badge/coverage-%E2%89%A570%25-2c7a3f) ![python](https://img.shields.io/badge/python-3.11%2B-3776ab) ![ruff](https://img.shields.io/badge/lint-ruff-261230) ![mypy](https://img.shields.io/badge/types-mypy-2a6db2) ![llm](https://img.shields.io/badge/llm-OpenAI%20%2B%20Anthropic-1e3a5f) ![dashboard](https://img.shields.io/badge/dashboard-Streamlit-ff4b4b) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
 Scheduled SEC EDGAR monitoring for a fixed 8-ticker watchlist. Detects substantive QoQ/YoY changes in 10-K / 10-Q section disclosures via a three-stage diff filter, joins Form 4 insider transactions to filing events on a ±14-day window, and surfaces flagged events through a Streamlit dashboard. Includes a pre-registered eval harness measuring accuracy against historical filing events.
 
-**Status:** Phase 1 MVP complete, plus a shipped DCF valuation layer (Subsystem 7). **2/3** on the 3 of 12 pre-registered eval events (tag [`eval-pre-registration-v1`](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1)). 223 tests passing (≥70% coverage, CI-gated). Published results: [`EVAL.md`](EVAL.md). Total real LLM spend across the entire build: **$1.76** ($1.27 OpenAI + $0.49 Anthropic, under a $3 hard cap).
+**Status:** Phase 1 MVP complete, plus a shipped DCF valuation layer (Subsystem 7). **2/3** on the 3 of 12 pre-registered graded events (tag [`eval-pre-registration-v1`](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1)); the 8-K guidance-extraction eval was separately expanded to a mechanically-selected, locked 12-accession panel (tag [`guidance-eval-registration-v1`](https://github.com/ian-menachery/redline)). 242 tests passing (≥70% coverage, CI-gated). Published results: [`EVAL.md`](EVAL.md). Total real LLM spend across the entire build: **$2.00** ($1.27 OpenAI + $0.73 Anthropic, under a $3 hard cap).
 
 **Live demos:** [redline-edgar.streamlit.app](https://redline-edgar.streamlit.app/) (disclosure monitor) and [redline-valuations.streamlit.app](https://redline-valuations.streamlit.app/) (DCF valuation dashboard).
 
-![dashboard screenshot](Screenshot.png)
+![Disclosure monitor — flagged filings, severity, and QoQ diffs](Screenshot.png)
+
+<!-- Manual step: add a valuation-dashboard screenshot here. Capture the
+     Valuations page of redline-valuations.streamlit.app (DCF range bar + FCF
+     projection), save it as docs/valuation_dashboard.png, then add:
+     ![Valuation dashboard — DCF range and FCF projection](docs/valuation_dashboard.png)
+     Left as a comment (not a live image link) so the README has no broken image. -->
+
 
 ---
 

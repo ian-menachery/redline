@@ -67,7 +67,7 @@ Goal: ship polish that makes the project defensible in extended interview conver
 - **Better section parsing for edge cases.** Empty Legal Proceedings ("see prior 10-K"), S-1-style risk-factor tables, 8-Ks with malformed item headers.
 - **Backoff / retry tuning on EDGAR errors.** Use 24h+ of live operation data to calibrate retry delays.
 - **Email / push alerts for high-priority flags.** Provider TBD. `notifier` interface scaffolded per `ARCHITECTURE.md` §6.
-- **Hosting — DONE (Streamlit Community Cloud).** Both dashboards are hosted: the disclosure monitor (`redline-edgar.streamlit.app`) and the DCF valuation dashboard (`redline-valuations.streamlit.app`, public-visibility toggle pending — see the Subsystem 7 section below). Read-only against committed curated snapshots; no cron/VPS. A VPS + scheduled-poller upgrade remains a future option, not a need.
+- **Hosting — DONE (Streamlit Community Cloud).** Both dashboards are hosted and **public**: the disclosure monitor (`redline-edgar.streamlit.app`) and the DCF valuation dashboard (`redline-valuations.streamlit.app`). Read-only against committed curated snapshots; no cron/VPS. A VPS + scheduled-poller upgrade remains a future option, not a need.
 - **Live operation log infrastructure.** `live_operation_log` table populated automatically; dashboard surface for "recent activity," separate from eval.
 - **Form 144 ingestion.** Second correlator signal — proposed open-market sales by affiliates. Adds context for distinguishing 10b5-1 from discretionary.
 - **Anomaly-score weight tuning.** Use Phase 1 eval results to set non-trivial weights on the three signals. Document the tuning process (cross-validation? eyeball calibration? both?) in `NOTES.md`.
@@ -79,7 +79,7 @@ Event-driven revaluation from XBRL financials (NOT sentiment, NOT alpha — see 
 **Done since the initial build:**
 - **8-K earnings-exhibit guidance extraction — DONE.** Feasibility gate passed (guidance is in Ex-99.1, not MD&A); typed extractor ran live on `claude-sonnet-4-6`; extraction-accuracy eval produced a real number (precision 0.875 vs the 0.90 bar — the residual FPs are correctly-classified segment figures against a totals-only gold; see `NOTES.md` §12).
 - **Assumption constants verified — DONE.** WACC / terminal growth / manual reference prices transcribed from sourced values; all six `is_placeholder: false`.
-- **Hosted dashboard — SHIPPED.** `dashboard/valuation_app.py` deployed to Streamlit Community Cloud (`redline-valuations.streamlit.app`), read-only against a committed curated snapshot, no key/secret. ⚠ Public-visibility toggle pending (currently Private — see `NOTES.md` §12 limitation 7).
+- **Hosted dashboard — SHIPPED & PUBLIC.** `dashboard/valuation_app.py` deployed to Streamlit Community Cloud (`redline-valuations.streamlit.app`), read-only against a committed curated snapshot, no key/secret; confirmed public/logged-out (see `NOTES.md` §12).
 
 **Still deferred (each needs its own feasibility gate before building):**
 - **Bank valuation model.** SCHW/KEY need a financials-appropriate model (dividend-discount / residual-income / P-TBV) if they're to be valued at all.
