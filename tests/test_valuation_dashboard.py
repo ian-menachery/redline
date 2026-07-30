@@ -108,3 +108,12 @@ def test_model_detail_none_when_projection_missing():
     assert va._model_detail({"assumptions_json": json.dumps({"wacc": 0.06})}) is None
     assert va._model_detail({"assumptions_json": None}) is None
     assert va._model_detail({}) is None
+
+
+def test_placeholder_guardrail_detection():
+    # The ILLUSTRATIVE banner fires only when the fed assumptions are placeholders.
+    assert va._assumptions_are_placeholder(
+        {"assumptions_json": json.dumps({"is_placeholder": True})}) is True
+    assert va._assumptions_are_placeholder(_row_with_projection()) is False  # is_placeholder False
+    assert va._assumptions_are_placeholder({"assumptions_json": None}) is False
+    assert va._assumptions_are_placeholder({}) is False

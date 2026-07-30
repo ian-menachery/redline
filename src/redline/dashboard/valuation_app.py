@@ -250,9 +250,28 @@ def _render_model_detail(d: dict) -> None:
                "not a recommendation.")
 
 
+def _assumptions_are_placeholder(v: dict) -> bool:
+    """True if the card's stored assumptions are still unverified placeholders.
+    All six names are currently verified (``is_placeholder: false``); this is the
+    guardrail that would fire if a constant were ever reset to a placeholder."""
+    raw = v.get("assumptions_json")
+    if not raw:
+        return False
+    try:
+        return bool(json.loads(raw).get("is_placeholder"))
+    except (TypeError, ValueError):
+        return False
+
+
 def _valuation_card(v: dict, ticker: str) -> None:
     with st.container(border=True):
         st.markdown(f"**{ticker}** · {v['company']}")
+        if _assumptions_are_placeholder(v):
+            st.markdown(
+                ":red[**ILLUSTRATIVE — NOT VALIDATED.**] Fed by placeholder "
+                "assumptions (WACC / terminal growth / reference price not yet "
+                "verified) — treat the range as illustrative only."
+            )
         cols = st.columns(3)
         cols[0].metric("Conservative", f"${v['bear']:,.0f}",
                        help="Bear-case per-share estimate (low end of the modeled range).")
