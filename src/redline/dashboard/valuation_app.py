@@ -17,6 +17,7 @@ Launch: ``streamlit run src/redline/dashboard/valuation_app.py``.
 from __future__ import annotations
 
 import datetime
+import json
 import os
 import sqlite3
 
@@ -50,7 +51,10 @@ def _latest_valuation(conn, ticker: str) -> dict | None:
         """
         SELECT v.per_share_bear AS bear, v.per_share_base AS base,
                v.per_share_bull AS bull, v.reference_price AS ref,
-               v.reference_price_asof AS asof, w.name AS company
+               v.reference_price_asof AS asof, w.name AS company,
+               v.wacc AS wacc, v.terminal_growth AS terminal_growth,
+               v.assumptions_json AS assumptions_json,
+               v.sensitivity_json AS sensitivity_json
         FROM dcf_valuations v JOIN watchlist w ON w.cik = v.cik
         WHERE w.ticker = ?
         ORDER BY v.id DESC LIMIT 1
@@ -134,6 +138,126 @@ def _fmt_asof(asof: str | None) -> tuple[str, bool]:
     return d.strftime("%b %d, %Y").replace(" 0", " "), stale
 
 
+def _fmt_money(v: float | None) -> str:
+    """Compact USD magnitude: $12.9B / $845M / $12,345."""
+    if v is None:
+        return "—"
+    a = abs(v)
+    if a >= 1e9:
+        return f"${v / 1e9:,.2f}B"
+    if a >= 1e6:
+        return f"${v / 1e6:,.1f}M"
+    return f"${v:,.0f}"
+
+
+def _model_detail(v: dict) -> dict | None:
+    """Parse the stored assumptions/sensitivity JSON into a render-ready
+    structure for the "how this was modeled" view. Pure (no engine import, no
+    recompute): the projection + rollup are baked into the snapshot by
+    ``revalue`` at valuation time. Returns ``None`` if a snapshot predates the
+    baked projection, so the app degrades gracefully rather than crashing."""
+    raw = v.get("assumptions_json")
+    if not raw:
+        return None
+    try:
+        a = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    projection = a.get("projection")
+    base_result = a.get("base_result")
+    if not projection or not base_result:
+        return None  # older snapshot without the baked projection
+
+    sens: dict = {}
+    if v.get("sensitivity_json"):
+        try:
+            sens = json.loads(v["sensitivity_json"])
+        except (TypeError, ValueError):
+            sens = {}
+
+    horizon = len(projection)
+    return {
+        "assumptions": {
+            "wacc": v.get("wacc") if v.get("wacc") is not None else a.get("wacc"),
+            "terminal_growth": (v.get("terminal_growth")
+                                if v.get("terminal_growth") is not None
+                                else a.get("terminal_growth")),
+            "tax_rate": a.get("tax_rate"),
+            "horizon": horizon,
+            "fiscal_year": a.get("fiscal_year"),
+            "base_revenue": a.get("base_revenue"),
+            "net_debt": a.get("net_debt"),
+            "shares_diluted": a.get("shares_diluted"),
+        },
+        "projection": projection,
+        "base_result": base_result,
+        "sensitivity": sens,
+        "low_confidence_note": a.get("low_confidence_note"),
+    }
+
+
+def _render_model_detail(d: dict) -> None:
+    """Render the read-only "how this was modeled" breakdown from baked data."""
+    a = d["assumptions"]
+    horizon = a["horizon"]
+    st.markdown(
+        f"**Assumptions** — WACC {a['wacc']:.1%} · terminal growth "
+        f"{a['terminal_growth']:.1%} · {horizon}-year explicit horizon · tax "
+        f"{a['tax_rate']:.0%}. Base year FY{a['fiscal_year']}: revenue "
+        f"{_fmt_money(a['base_revenue'])}, net debt {_fmt_money(a['net_debt'])}, "
+        f"{a['shares_diluted']:,.0f} diluted shares."
+    )
+    if d.get("low_confidence_note"):
+        st.caption(f"Note: {d['low_confidence_note']}")
+
+    st.markdown("**Base-case free-cash-flow projection**")
+    st.dataframe(
+        [
+            {
+                "Year": r["year"],
+                "Rev growth": f"{r['revenue_growth']:.1%}",
+                "Revenue": _fmt_money(r["revenue"]),
+                "FCF": _fmt_money(r["fcf"]),
+                "PV of FCF": _fmt_money(r["pv"]),
+            }
+            for r in d["projection"]
+        ],
+        hide_index=True, use_container_width=True,
+    )
+
+    br = d["base_result"]
+    st.markdown(
+        f"PV of explicit FCFs {_fmt_money(br['pv_explicit'])} + PV of terminal "
+        f"value {_fmt_money(br['pv_terminal'])} = enterprise value "
+        f"{_fmt_money(br['enterprise_value'])} − net debt = equity "
+        f"{_fmt_money(br['equity_value'])} ÷ shares = **${br['per_share']:,.0f}** "
+        f"base per share. Terminal value is {br['terminal_value_fraction']:.0%} "
+        f"of enterprise value."
+    )
+
+    sens = d.get("sensitivity") or {}
+    wacc_pts = sens.get("wacc") or []
+    growth_pts = sens.get("revenue_growth_shift") or []
+    if wacc_pts or growth_pts:
+        st.markdown("**Sensitivity** (per-share value)")
+        cols = st.columns(2)
+        if wacc_pts:
+            cols[0].caption("By WACC")
+            cols[0].dataframe(
+                [{"WACC": f"{w:.1%}", "Per share": f"${ps:,.0f}"} for w, ps in wacc_pts],
+                hide_index=True, use_container_width=True,
+            )
+        if growth_pts:
+            cols[1].caption("By revenue-growth shift")
+            cols[1].dataframe(
+                [{"Growth shift": f"{g:+.1%}", "Per share": f"${ps:,.0f}"}
+                 for g, ps in growth_pts],
+                hide_index=True, use_container_width=True,
+            )
+    st.caption("Modeled from the company's own reported cash flows — illustrative, "
+               "not a recommendation.")
+
+
 def _valuation_card(v: dict, ticker: str) -> None:
     st.markdown(f"#### {ticker} · {v['company']}")
     cols = st.columns(3)
@@ -149,6 +273,10 @@ def _valuation_card(v: dict, ticker: str) -> None:
         else:
             st.caption(f"Estimated value range vs. {suffix}.")
     st.caption("A modeled range from the company's own reported cash flows — not a recommendation.")
+    detail = _model_detail(v)
+    if detail:
+        with st.expander("How this was modeled"):
+            _render_model_detail(detail)
 
 
 # ---------------------------------------------------------------------------

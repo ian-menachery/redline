@@ -35,6 +35,7 @@ from redline.valuation import fcf
 from redline.valuation.dcf import (
     DcfInputs,
     ScenarioBand,
+    project_fcf,
     sensitivity,
     shift_revenue_growth,
     shift_wacc,
@@ -145,6 +146,10 @@ def _insert_valuation(
     extra_links: list[dict] | None = None,
 ) -> int:
     snapshot = _assumptions_snapshot(base, a, base_inputs)
+    # Bake the base-case FCF projection + result rollup so the dashboard can show
+    # "how this was modeled" from stored data alone (no engine recompute at load).
+    snapshot["projection"] = [r.model_dump() for r in project_fcf(base_inputs)]
+    snapshot["base_result"] = band.base.model_dump()
     conn.execute("BEGIN")
     try:
         cur = conn.execute(

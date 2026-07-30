@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from redline.valuation.dcf import (
     DcfDrivers,
     DcfInputs,
+    project_fcf,
     run_scenarios,
     sensitivity,
     shift_revenue_growth,
@@ -151,6 +152,29 @@ def test_scenario_band_rejects_inverted_ordering():
                          pv_explicit=ps, pv_terminal=0.0, terminal_value_fraction=0.0)
     with pytest.raises(ValidationError):
         ScenarioBand(bear=_res(20.0), base=_res(15.0), bull=_res(10.0))  # inverted
+
+
+def test_project_fcf_closed_form_horizon1():
+    """Same hand-computed horizon=1 case as test_value_dcf_closed_form: the
+    per-year row exposes revenue 1100, FCF 155, PV 155/1.10."""
+    rows = project_fcf(_inputs())
+    assert len(rows) == 1
+    r = rows[0]
+    assert r.year == 1
+    assert math.isclose(r.revenue, 1100.0, rel_tol=1e-9)
+    assert math.isclose(r.fcf, 155.0, rel_tol=1e-9)
+    assert math.isclose(r.pv, 155.0 / 1.10, rel_tol=1e-9)
+
+
+def test_project_fcf_consistent_with_value_dcf():
+    """The projection is the single source of the explicit-horizon math:
+    sum of its PVs must equal value_dcf's pv_explicit, over a multi-year run."""
+    inp = _inputs(drivers=_drivers(years=5))
+    rows = project_fcf(inp)
+    result = value_dcf(inp)
+    assert len(rows) == 5
+    assert [r.year for r in rows] == [1, 2, 3, 4, 5]
+    assert math.isclose(sum(r.pv for r in rows), result.pv_explicit, rel_tol=1e-12)
 
 
 def test_value_dcf_raises_on_inverted_gordon():

@@ -86,6 +86,18 @@ class DcfResult(BaseModel):
     )
 
 
+class ProjectionYear(BaseModel):
+    """One explicit-horizon year of the FCF projection (for auditability)."""
+
+    year: int                 # 1-indexed year of the projection
+    revenue_growth: float
+    revenue: float
+    ebit: float
+    nopat: float
+    fcf: float
+    pv: float                 # PV of this year's FCF, discounted at WACC
+
+
 class ScenarioBand(BaseModel):
     """Bear/base/bull range — the headline output. Never a single point."""
 
@@ -118,15 +130,16 @@ class ScenarioBand(BaseModel):
         return self.bull.per_share
 
 
-def value_dcf(inputs: DcfInputs) -> DcfResult:
-    """Value one scenario. Pure; the building block under `run_scenarios`."""
+def project_fcf(inputs: DcfInputs) -> list[ProjectionYear]:
+    """The explicit-horizon FCF projection, year by year. Pure; the single
+    source of the projection math shared by `value_dcf` and the dashboard's
+    "how this was modeled" view."""
     d = inputs.drivers
     revenue = inputs.base_revenue
     prev_nwc = inputs.base_nwc
     discount = 1.0 + inputs.wacc
 
-    pv_explicit = 0.0
-    last_fcf = 0.0
+    rows: list[ProjectionYear] = []
     for t in range(d.horizon):
         revenue = revenue * (1.0 + d.revenue_growth[t])
         ebit = revenue * d.operating_margin[t]
@@ -138,8 +151,21 @@ def value_dcf(inputs: DcfInputs) -> DcfResult:
         prev_nwc = nwc
 
         fcf = nopat + da - capex - change_in_nwc
-        pv_explicit += fcf / (discount ** (t + 1))
-        last_fcf = fcf
+        rows.append(ProjectionYear(
+            year=t + 1, revenue_growth=d.revenue_growth[t], revenue=revenue,
+            ebit=ebit, nopat=nopat, fcf=fcf, pv=fcf / (discount ** (t + 1)),
+        ))
+    return rows
+
+
+def value_dcf(inputs: DcfInputs) -> DcfResult:
+    """Value one scenario. Pure; the building block under `run_scenarios`."""
+    d = inputs.drivers
+    discount = 1.0 + inputs.wacc
+
+    projection = project_fcf(inputs)
+    pv_explicit = sum(r.pv for r in projection)
+    last_fcf = projection[-1].fcf  # DcfDrivers enforces horizon >= 1
 
     # Gordon-growth terminal value on the final-year FCF, discounted back.
     # DcfInputs._gordon_convergence enforces wacc > terminal_growth on
