@@ -1,6 +1,6 @@
 [project]
 name = "redline"
-version = "0.2.0"
+version = "0.3.0"
 description = "Scheduled SEC EDGAR monitoring with QoQ section diffs + Form 4 correlation."
 requires-python = ">=3.11"
 
