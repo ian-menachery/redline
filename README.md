@@ -1,10 +1,10 @@
 # redline
 
-[![CI](https://github.com/ian-menachery/redline/actions/workflows/ci.yml/badge.svg)](https://github.com/ian-menachery/redline/actions/workflows/ci.yml) ![tests](https://img.shields.io/badge/tests-207%20passing-2c7a3f) ![python](https://img.shields.io/badge/python-3.11%2B-3776ab) ![ruff](https://img.shields.io/badge/lint-ruff-261230) ![mypy](https://img.shields.io/badge/types-mypy-2a6db2) ![llm](https://img.shields.io/badge/llm-OpenAI%20%2B%20Anthropic-1e3a5f) ![dashboard](https://img.shields.io/badge/dashboard-Streamlit-ff4b4b) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
+[![CI](https://github.com/ian-menachery/redline/actions/workflows/ci.yml/badge.svg)](https://github.com/ian-menachery/redline/actions/workflows/ci.yml) ![tests](https://img.shields.io/badge/tests-223%20passing-2c7a3f) ![coverage](https://img.shields.io/badge/coverage-%E2%89%A570%25-2c7a3f) ![python](https://img.shields.io/badge/python-3.11%2B-3776ab) ![ruff](https://img.shields.io/badge/lint-ruff-261230) ![mypy](https://img.shields.io/badge/types-mypy-2a6db2) ![llm](https://img.shields.io/badge/llm-OpenAI%20%2B%20Anthropic-1e3a5f) ![dashboard](https://img.shields.io/badge/dashboard-Streamlit-ff4b4b) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
 Scheduled SEC EDGAR monitoring for a fixed 8-ticker watchlist. Detects substantive QoQ/YoY changes in 10-K / 10-Q section disclosures via a three-stage diff filter, joins Form 4 insider transactions to filing events on a ±14-day window, and surfaces flagged events through a Streamlit dashboard. Includes a pre-registered eval harness measuring accuracy against historical filing events.
 
-**Status:** Phase 1 MVP complete, plus a shipped DCF valuation layer (Subsystem 7). **2/3** on the 3 of 12 pre-registered eval events (tag [`eval-pre-registration-v1`](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1)). 207/207 tests passing. Total real LLM spend across the entire build: **$1.76** ($1.27 OpenAI + $0.49 Anthropic, under a $3 hard cap).
+**Status:** Phase 1 MVP complete, plus a shipped DCF valuation layer (Subsystem 7). **2/3** on the 3 of 12 pre-registered eval events (tag [`eval-pre-registration-v1`](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1)). 223 tests passing (≥70% coverage, CI-gated). Published results: [`EVAL.md`](EVAL.md). Total real LLM spend across the entire build: **$1.76** ($1.27 OpenAI + $0.49 Anthropic, under a $3 hard cap).
 
 **Live demos:** [redline-edgar.streamlit.app](https://redline-edgar.streamlit.app/) (disclosure monitor) and [redline-valuations.streamlit.app](https://redline-valuations.streamlit.app/) (DCF valuation dashboard).
 
@@ -21,7 +21,7 @@ Scheduled SEC EDGAR monitoring for a fixed 8-ticker watchlist. Detects substanti
 | Cadence | 15-minute polling, EDGAR fair-access compliant |
 | LLM provider | OpenAI today (`gpt-4o-mini` cheap-role + `gpt-4o` quality-role), automatic fallover to Anthropic on `insufficient_quota` |
 | Pipeline state machine | `fetched → parsed → analyzed → flagged` with retry queue (3 retries, 1-hour window) |
-| Tests | 207 passing |
+| Tests | 223 passing (≥70% coverage) |
 | Real LLM spend across the entire build | $1.76 ($1.27 OpenAI + $0.49 Anthropic) |
 
 ---
@@ -188,7 +188,7 @@ All locked in [`CLAUDE.md`](CLAUDE.md) §4. Each survived a critical review pass
 - **`edgartools`** for EDGAR access
 - **OpenAI SDK** + **Anthropic SDK** behind a provider-agnostic client with exception-driven fallover
 - **Streamlit** for the dashboard
-- **pytest** — 207 tests covering parsers, three-stage filter, anomaly signals, eval grader, LLM client, storage, and the DCF valuation layer (DCF engine, FCF reconstruction, XBRL ingest, guidance extraction + its precision/recall grader, and the revaluation hook)
+- **pytest** — 223 tests (≥70% coverage, CI-gated) covering parsers, three-stage filter, anomaly signals, eval grader, LLM client, storage, the DCF valuation layer (DCF engine, FCF reconstruction, XBRL ingest, guidance extraction + its precision/recall grader, revaluation hook), and the dashboard chart builders
 
 ---
 
@@ -230,7 +230,7 @@ python -m redline.poller          # 15-min cadence
 pip install -e ".[dev]"    # ruff + mypy + pytest
 ruff check .               # lint
 mypy src/redline           # type-check
-pytest -q                  # 207 tests
+pytest -q                  # 223 tests
 ```
 
 These three run on every push/PR via GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)), matrixed over Python 3.11 and 3.12.
@@ -290,6 +290,9 @@ Listed in [`ROADMAP.md`](ROADMAP.md). Not pulled into Phase 1 because each is in
 
 | Doc | Purpose |
 |---|---|
+| [`docs/design.md`](docs/design.md) | **The "why"** — design decisions in narrative form (scope, the noise filter, the 10b5-1 correlator, DCF tool-choice, eval discipline, engineering guardrails). |
+| [`docs/methodology.md`](docs/methodology.md) | **How a filing flows through the system** end-to-end, in plain terms. |
+| [`EVAL.md`](EVAL.md) | Published, reproducible eval results (generated from `eval_runs`). |
 | [`CLAUDE.md`](CLAUDE.md) | Operating manual for any working session in this repo. Locked scoping decisions (§4) + decision-authority rules (§8) + LLM usage conventions (§9). |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | System design reference. Subsystem internals, SQLite schema, LLM call boundaries, data-flow walkthrough, provider fallover. |
 | [`NOTES.md`](NOTES.md) | Running notebook: `edgartools` quirks (§5), Form 4 + 10b5-1 details (§2-§3), PLTR Q2-vs-Q3 and FY22-vs-FY23 manual-diff verdicts (§1), Form 4 distribution spike (§3.1), eval findings (§11). |

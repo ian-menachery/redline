@@ -5,7 +5,7 @@ description = "Scheduled SEC EDGAR monitoring with QoQ section diffs + Form 4 co
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
-dev = ["ruff>=0.6", "mypy>=1.11", "pytest>=8"]
+dev = ["ruff>=0.6", "mypy>=1.11", "pytest>=8", "pytest-cov>=5"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -16,6 +16,10 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["redline"]
+omit = ["*/__main__.py"]
 
 [tool.ruff]
 line-length = 100
