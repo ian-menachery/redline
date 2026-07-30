@@ -35,7 +35,9 @@ ignore = ["E501"]
 "__init__.py" = ["F401"]
 
 [tool.mypy]
-python_version = "3.11"
+# No python_version pin: each CI matrix job analyzes with its own interpreter
+# (3.11 + 3.12), which also keeps mypy in step with the version-specific stubs
+# installed on that runner. The 3.11 job enforces our >=3.11 floor.
 files = ["src/redline"]
 # edgartools / streamlit / openai-beta surfaces are untyped or partially typed.
 ignore_missing_imports = true
@@ -44,9 +46,11 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 
 # Don't type-check third-party internals we don't own. numpy/pandas ship
-# py.typed stubs whose newer (3.12) versions use PEP 695 `type` statements that
-# mypy-as-3.11 can't parse — and we never use them directly (transitive via
-# edgartools). Skip following them.
+# py.typed stubs (transitive via edgartools) we never use directly; skip
+# following them. Note: the bare package names are required (a `numpy.*` glob
+# does not match top-level `numpy`), and follow_imports_for_stubs is required
+# to skip .pyi stub packages.
 [[tool.mypy.overrides]]
-module = ["numpy.*", "pandas.*"]
+module = ["numpy", "numpy.*", "pandas", "pandas.*"]
 follow_imports = "skip"
+follow_imports_for_stubs = true
