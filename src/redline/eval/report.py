@@ -24,7 +24,9 @@ from redline.config import RedlineConfig
 from redline.storage.db import connect
 
 _GUIDANCE_PREFIX = "guidance_extraction:"
+_GUIDANCE_HELDOUT_PREFIX = "guidance_extraction_heldout:"
 _FCF_PREFIX = "fcf_validation:"
+_DEFAULT_PER_COMPANY = 2
 
 
 def _latest_per_event(rows: list[dict]) -> list[dict]:
@@ -46,11 +48,63 @@ def _loads(value: Any) -> Any:
         return value
 
 
-def render_eval_markdown(rows: list[dict]) -> str:
-    """Pure renderer: latest ``eval_runs`` rows -> EVAL.md text."""
+def _metric_table(rows: list[dict], prefix: str) -> list[str]:
+    """Markdown precision/recall table for one guidance panel."""
+    out = ["| Metric | Precision | Recall | F1 | TP | FP | FN |",
+           "|---|---|---|---|---|---|---|"]
+    for r in rows:
+        metric = r["event_id"][len(prefix):]
+        s = _loads(r.get("judge_result")) or {}
+
+        def _f(x: Any) -> str:
+            return f"{x:.3f}" if isinstance(x, (int, float)) else "n/a"
+        out.append(
+            f"| {metric} | {_f(s.get('precision'))} | {_f(s.get('recall'))} | "
+            f"{_f(s.get('f1'))} | {s.get('tp', '')} | {s.get('fp', '')} | "
+            f"{s.get('fn', '')} |"
+        )
+    return out
+
+
+def _panel_sizes(registration: dict | None) -> list[str]:
+    """Explicit, numeric per-panel n + named undershoot. Never implies a larger
+    n than the manifest supports (reporting-transparency, not a selection change)."""
+    if not registration:
+        return []
+    accessions = list(registration.get("accessions") or [])
+    per_company = int(registration.get("per_company") or _DEFAULT_PER_COMPANY)
+    heldout = [a for a in accessions if not a.get("previously_observed", True)]
+
+    counts: dict[str, int] = {}
+    for a in accessions:
+        counts[a.get("ticker", "?")] = counts.get(a.get("ticker", "?"), 0) + 1
+    undershoot = sorted(t for t, c in counts.items() if c < per_company)
+
+    out = [
+        f"**Panel size:** full n = {len(accessions)} accessions "
+        f"({len(counts)} companies); held-out (never-seen) n = {len(heldout)} "
+        f"accessions ({len({a.get('ticker') for a in heldout})} companies).",
+    ]
+    if undershoot:
+        out.append(
+            "**Undershoot** — fewer than the target "
+            f"{per_company} accessions: "
+            + ", ".join(f"{t} ({counts[t]})" for t in undershoot) + "."
+        )
+    out.append("")
+    return out
+
+
+def render_eval_markdown(rows: list[dict], registration: dict | None = None) -> str:
+    """Pure renderer: latest ``eval_runs`` rows -> EVAL.md text.
+
+    ``registration`` is the guidance-eval manifest (``registration:`` block of
+    ``guidance_labels.yaml``); when present it drives the explicit per-panel n
+    and undershoot reporting."""
     latest = _latest_per_event(rows)
     graded = [r for r in latest if ":" not in r["event_id"]]
     guidance = [r for r in latest if r["event_id"].startswith(_GUIDANCE_PREFIX)]
+    heldout = [r for r in latest if r["event_id"].startswith(_GUIDANCE_HELDOUT_PREFIX)]
     fcf = [r for r in latest if r["event_id"].startswith(_FCF_PREFIX)]
 
     out: list[str] = ["# Eval results", ""]
@@ -91,21 +145,22 @@ def render_eval_markdown(rows: list[dict]) -> str:
 
     # --- Guidance extraction ---
     if guidance:
-        out += ["## Guidance extraction (8-K)", "",
-                "| Metric | Precision | Recall | F1 | TP | FP | FN |",
-                "|---|---|---|---|---|---|---|"]
-        for r in guidance:
-            metric = r["event_id"][len(_GUIDANCE_PREFIX):]
-            s = _loads(r.get("judge_result")) or {}
-
-            def _f(x: Any) -> str:
-                return f"{x:.3f}" if isinstance(x, (int, float)) else "n/a"
+        out += ["## Guidance extraction (8-K)", ""]
+        if registration and registration.get("locked_at"):
             out.append(
-                f"| {metric} | {_f(s.get('precision'))} | {_f(s.get('recall'))} | "
-                f"{_f(s.get('f1'))} | {s.get('tp', '')} | {s.get('fp', '')} | "
-                f"{s.get('fn', '')} |"
+                f"Panel selected by mechanical Rule R, locked at "
+                f"`{registration['locked_at']}` (tag `guidance-eval-registration-v1`)."
             )
+            out.append("")
+        out += _panel_sizes(registration)
+        out += ["**Full panel** (all registered accessions):", ""]
+        out += _metric_table(guidance, _GUIDANCE_PREFIX)
         out.append("")
+        if heldout:
+            out += ["**Held-out sub-panel** (never-seen accessions only, "
+                    "`previously_observed: false`):", ""]
+            out += _metric_table(heldout, _GUIDANCE_HELDOUT_PREFIX)
+            out.append("")
 
     # --- FCF validation ---
     if fcf:
@@ -123,6 +178,18 @@ def render_eval_markdown(rows: list[dict]) -> str:
         "python -m redline.eval.harness --all --db-path data/eval_run.db --fresh",
         "```", "",
     ]
+    if guidance:
+        out += [
+            "The guidance-extraction panel is selected by a mechanical rule "
+            "(Rule R) over persisted DB state — a pure, deterministic read (no "
+            "network at selection time). Reproduce end-to-end:", "",
+            "```",
+            "python scripts/backfill_8ks.py --months 15   # live EDGAR, no LLM",
+            "python -m redline.valuation.guidance --once   # extraction (needs an LLM key)",
+            "python -m redline.valuation.guidance_eval     # precision/recall on scope=total",
+            "python -m redline.eval.report                 # regenerate this file",
+            "```", "",
+        ]
     return "\n".join(out) + "\n"
 
 
@@ -138,6 +205,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Render EVAL.md from eval_runs.")
     parser.add_argument("--settings", default="config/settings.toml")
     parser.add_argument("--db-path", help="Override settings.storage.db_path.")
+    parser.add_argument("--labels", default="config/valuation/guidance_labels.yaml",
+                        help="Guidance gold/registration file (for per-panel n).")
     parser.add_argument("--out", default="EVAL.md")
     args = parser.parse_args(argv)
 
@@ -152,7 +221,13 @@ def main(argv: list[str] | None = None) -> int:
     if not rows:
         print(f"No eval_runs rows in {db_path}; nothing to report.")
         return 1
-    Path(args.out).write_text(render_eval_markdown(rows), encoding="utf-8")
+
+    registration = None
+    labels_path = Path(args.labels)
+    if labels_path.exists():
+        from redline.valuation.guidance_eval import load_registration
+        registration = load_registration(labels_path)
+    Path(args.out).write_text(render_eval_markdown(rows, registration), encoding="utf-8")
     print(f"wrote {args.out} from {len(rows)} eval_runs rows ({db_path})")
     return 0
 

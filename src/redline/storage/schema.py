@@ -250,6 +250,22 @@ CREATE TABLE IF NOT EXISTS guidance_runs (
 );
 """
 
+# Subsystem 7 — persisted qualification flags for the guidance-eval selection
+# rule (Rule R). An 8-K "qualifies" iff it has item 2.02 AND an EX-99.x exhibit.
+# Both predicates are evaluated ONCE during the EDGAR backfill (the only network
+# step) and recorded here, so the registration selection is a pure, deterministic
+# DB read with no network calls. Additive companion table — filings_seen stays
+# owned by the poller and is not altered.
+EARNINGS_8K_QUALIFICATION_DDL = """
+CREATE TABLE IF NOT EXISTS earnings_8k_qualification (
+    accession    TEXT PRIMARY KEY REFERENCES filings_seen(accession),
+    form         TEXT NOT NULL,      -- authoritative EDGAR form: '8-K' vs '8-K/A'
+    is_earnings  INTEGER NOT NULL,   -- item 2.02 ("Results of Operations") present
+    has_ex99     INTEGER NOT NULL,   -- an EX-99.x exhibit present
+    checked_at   TIMESTAMP NOT NULL
+);
+"""
+
 # Eval harness scorecard (ARCHITECTURE.md §10).
 EVAL_RUNS_DDL = """
 CREATE TABLE IF NOT EXISTS eval_runs (
@@ -287,6 +303,7 @@ def init_full_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(DCF_VALUATIONS_DDL)
     conn.executescript(VALUATION_INPUT_LINKS_DDL)
     conn.executescript(GUIDANCE_RUNS_DDL)
+    conn.executescript(EARNINGS_8K_QUALIFICATION_DDL)
     conn.executescript(EVAL_RUNS_DDL)
 
 

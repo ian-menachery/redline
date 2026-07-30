@@ -56,7 +56,41 @@ def test_namespaced_events_excluded_from_graded_global():
     rows = [
         _row("key_10k_fy22", True, subs=["diff_analyzer"]),
         _row("guidance_extraction:revenue", False),
+        _row("guidance_extraction_heldout:revenue", False),
         _row("fcf_validation:VRTX", True),
     ]
     md = render_eval_markdown(rows)
     assert "Global: 1/1 passed" in md  # only the one pre-registered event
+
+
+def _stats(precision, recall, f1, tp, fp, fn):
+    return json.dumps({"precision": precision, "recall": recall, "f1": f1,
+                       "tp": tp, "fp": fp, "fn": fn})
+
+
+def test_render_heldout_subpanel_and_panel_sizes():
+    rows = [
+        _row("guidance_extraction:revenue", True,
+             judge_result=_stats(0.95, 1.0, 0.97, 10, 1, 0)),
+        _row("guidance_extraction_heldout:revenue", True,
+             judge_result=_stats(1.0, 1.0, 1.0, 4, 0, 0)),
+    ]
+    registration = {
+        "locked_at": "2026-07-30T00:00:00Z",
+        "per_company": 2,
+        "accessions": [
+            {"ticker": "PLTR", "accession": "p1", "previously_observed": True},
+            {"ticker": "PLTR", "accession": "p2", "previously_observed": True},
+            {"ticker": "VRTX", "accession": "v1", "previously_observed": False},
+            {"ticker": "VRTX", "accession": "v2", "previously_observed": False},
+            {"ticker": "ULTA", "accession": "u1", "previously_observed": False},
+        ],
+    }
+    md = render_eval_markdown(rows, registration)
+    assert "Full panel" in md and "Held-out sub-panel" in md
+    assert "full n = 5 accessions (3 companies)" in md
+    assert "held-out (never-seen) n = 3 accessions (2 companies)" in md
+    # ULTA contributed only 1 accession -> named as undershoot.
+    assert "Undershoot" in md and "ULTA (1)" in md
+    assert "locked at `2026-07-30T00:00:00Z`" in md
+    assert "guidance-eval-registration-v1" in md

@@ -4,7 +4,12 @@ from __future__ import annotations
 import sqlite3
 
 from redline.storage.schema import init_full_schema
-from redline.valuation.guidance_eval import _extracted_rows, grade_guidance
+from redline.valuation.guidance_eval import (
+    _extracted_rows,
+    grade_guidance,
+    load_gold,
+    load_registration,
+)
 
 
 def _g(accession="A1", metric="revenue", period="FY2026", low=12.95, high=13.1,
@@ -111,3 +116,46 @@ def test_1000x_magnitude_error_still_miss():
     gold = _g(low=1327.0, high=1331.0, unit="usd_millions")  # truth is 1327 million
     stats = grade_guidance([ext], [gold])
     assert stats["tp"] == 0 and stats["fp"] == 1 and stats["fn"] == 1
+
+
+# --- v2 file shape: {registration, labels} + backward-compat bare list ---
+
+_V2 = """
+registration:
+  locked_at: "2026-07-30T00:00:00Z"
+  per_company: 2
+  accessions:
+    - {ticker: AAA, accession: a1, filed_at: "2026-05-04", previously_observed: false}
+    - {ticker: BBB, accession: b1, filed_at: "2026-04-01", previously_observed: true}
+labels:
+  - {ticker: AAA, accession: a1, metric: revenue, period: FY2026, low: 1.0, high: 2.0, unit: usd_billions, basis: unspecified}
+"""
+
+_BARE_LIST = """
+- {ticker: AAA, accession: a1, metric: revenue, period: FY2026, low: 1.0, high: 2.0, unit: usd_billions, basis: unspecified}
+"""
+
+
+def test_load_gold_reads_labels_from_v2(tmp_path):
+    p = tmp_path / "labels.yaml"
+    p.write_text(_V2, encoding="utf-8")
+    gold = load_gold(p)
+    assert len(gold) == 1 and gold[0]["accession"] == "a1"
+
+
+def test_load_gold_backward_compat_bare_list(tmp_path):
+    p = tmp_path / "labels.yaml"
+    p.write_text(_BARE_LIST, encoding="utf-8")
+    gold = load_gold(p)
+    assert len(gold) == 1 and gold[0]["metric"] == "revenue"
+
+
+def test_load_registration_present_and_absent(tmp_path):
+    p2 = tmp_path / "v2.yaml"
+    p2.write_text(_V2, encoding="utf-8")
+    reg = load_registration(p2)
+    assert reg is not None and len(reg["accessions"]) == 2
+
+    p1 = tmp_path / "bare.yaml"
+    p1.write_text(_BARE_LIST, encoding="utf-8")
+    assert load_registration(p1) is None
