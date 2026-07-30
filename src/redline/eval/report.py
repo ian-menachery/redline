@@ -25,8 +25,39 @@ from redline.storage.db import connect
 
 _GUIDANCE_PREFIX = "guidance_extraction:"
 _GUIDANCE_HELDOUT_PREFIX = "guidance_extraction_heldout:"
+_GUIDANCE_ELIGIBLE_PREFIX = "guidance_extraction_eligible:"
 _FCF_PREFIX = "fcf_validation:"
 _DEFAULT_PER_COMPANY = 2
+
+
+def _overall(rows: list[dict]) -> dict:
+    """Aggregate per-metric rows into one precision/recall/F1 by summing TP/FP/FN."""
+    tp = fp = fn = 0
+    for r in rows:
+        s = _loads(r.get("judge_result")) or {}
+        tp += int(s.get("tp") or 0)
+        fp += int(s.get("fp") or 0)
+        fn += int(s.get("fn") or 0)
+    p = tp / (tp + fp) if (tp + fp) else None
+    rec = tp / (tp + fn) if (tp + fn) else None
+    return {"precision": p, "recall": rec, "tp": tp, "fp": fp, "fn": fn}
+
+
+def _metric_row(rows: list[dict], prefix: str, metric: str) -> dict | None:
+    """The per-metric stats dict for a single metric in a namespace, if present."""
+    for r in rows:
+        if r["event_id"] == f"{prefix}{metric}":
+            return _loads(r.get("judge_result")) or {}
+    return None
+
+
+def _pr(stats: dict | None) -> str:
+    """Format 'precision X / recall Y' from a stats dict."""
+    if not stats:
+        return "n/a"
+    def _f(x: Any) -> str:
+        return f"{x:.3f}" if isinstance(x, (int, float)) else "n/a"
+    return f"precision {_f(stats.get('precision'))} / recall {_f(stats.get('recall'))}"
 
 
 def _latest_per_event(rows: list[dict]) -> list[dict]:
@@ -105,6 +136,7 @@ def render_eval_markdown(rows: list[dict], registration: dict | None = None) -> 
     graded = [r for r in latest if ":" not in r["event_id"]]
     guidance = [r for r in latest if r["event_id"].startswith(_GUIDANCE_PREFIX)]
     heldout = [r for r in latest if r["event_id"].startswith(_GUIDANCE_HELDOUT_PREFIX)]
+    eligible = [r for r in latest if r["event_id"].startswith(_GUIDANCE_ELIGIBLE_PREFIX)]
     fcf = [r for r in latest if r["event_id"].startswith(_FCF_PREFIX)]
 
     out: list[str] = ["# Eval results", ""]
@@ -152,13 +184,41 @@ def render_eval_markdown(rows: list[dict], registration: dict | None = None) -> 
                 f"`{registration['locked_at']}` (tag `guidance-eval-registration-v1`)."
             )
             out.append("")
+
+        # Headline: the metric the DCF actually consumes (revenue), scored on the
+        # figures the pipeline actually acts on (trigger-eligible). Then the
+        # confidence-gated overall, then the raw all-figures overall — so the
+        # narrow, decision-relevant number and the broad number are both visible.
+        rev_elig = _metric_row(eligible, _GUIDANCE_ELIGIBLE_PREFIX, "revenue")
+        if rev_elig:
+            out += [
+                "### Headline", "",
+                f"- **Revenue guidance — the only figure the DCF consumes, "
+                f"trigger-eligible: {_pr(rev_elig)}.**",
+            ]
+            if eligible:
+                out.append(
+                    f"- Confidence-gated overall (all metrics the pipeline acts on): "
+                    f"{_pr(_overall(eligible))} — the gate trades some recall for precision."
+                )
+            out.append(
+                f"- Raw, every extracted figure (incl. out-of-scope metrics the model "
+                f"never uses): {_pr(_overall(guidance))}."
+            )
+            out.append("")
+
         out += _panel_sizes(registration)
-        out += ["**Full panel** (all registered accessions):", ""]
+        out += ["**Full panel** — every extracted figure, all metrics (raw):", ""]
         out += _metric_table(guidance, _GUIDANCE_PREFIX)
         out.append("")
+        if eligible:
+            out += ["**Acted-upon** — only trigger-eligible figures (what the DCF "
+                    "consumes; `manual_review` figures are quarantined by the gate):", ""]
+            out += _metric_table(eligible, _GUIDANCE_ELIGIBLE_PREFIX)
+            out.append("")
         if heldout:
-            out += ["**Held-out sub-panel** (never-seen accessions only, "
-                    "`previously_observed: false`):", ""]
+            out += ["**Held-out sub-panel** — never-seen accessions only "
+                    "(`previously_observed: false`):", ""]
             out += _metric_table(heldout, _GUIDANCE_HELDOUT_PREFIX)
             out.append("")
 

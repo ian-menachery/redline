@@ -94,3 +94,22 @@ def test_render_heldout_subpanel_and_panel_sizes():
     assert "Undershoot" in md and "ULTA (1)" in md
     assert "locked at `2026-07-30T00:00:00Z`" in md
     assert "guidance-eval-registration-v1" in md
+
+
+def test_headline_leads_with_revenue_trigger_eligible():
+    rows = [
+        _row("guidance_extraction:revenue", True, judge_result=_stats(0.92, 1.0, 0.96, 12, 1, 0)),
+        _row("guidance_extraction:other", False, judge_result=_stats(0.25, 1.0, 0.4, 2, 6, 0)),
+        _row("guidance_extraction_eligible:revenue", True,
+             judge_result=_stats(1.0, 1.0, 1.0, 12, 0, 0)),
+        _row("guidance_extraction_eligible:other", True,
+             judge_result=_stats(0.4, 1.0, 0.57, 2, 3, 0)),
+    ]
+    md = render_eval_markdown(rows)
+    assert "Headline" in md
+    # revenue trigger-eligible leads, at 1.000/1.000
+    assert "Revenue guidance" in md and "precision 1.000 / recall 1.000" in md
+    # gated overall aggregates the eligible namespace: tp=14 fp=3 -> 0.824
+    assert "0.824" in md
+    # raw overall is still shown (tp=14 fp=7 -> 0.667) and the acted-upon table present
+    assert "Acted-upon" in md

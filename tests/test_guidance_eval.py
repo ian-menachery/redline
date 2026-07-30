@@ -39,14 +39,14 @@ def test_f1_none_only_when_undefined():
     assert empty["precision"] is None and empty["recall"] is None and empty["f1"] is None
 
 
-def _insert_fig(conn, accession, scope):
+def _insert_fig(conn, accession, scope, review_status="trigger_eligible"):
     conn.execute(
         "INSERT INTO extracted_figures (accession, cik, metric, scope, period, "
         "low, high, unit, basis, is_reaffirmed, confidence, review_status, "
         "prompt_version, parser_version, extracted_at) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (accession, "0001", "revenue", scope, "FY2026", 1.0, 2.0, "usd_billions",
-         "unspecified", 0, 0.9, "trigger_eligible", "v1", "v1", "t"),
+         "unspecified", 0, 0.9, review_status, "v1", "v1", "t"),
     )
 
 
@@ -62,6 +62,19 @@ def test_extracted_rows_totals_only_excludes_segment():
     totals = _extracted_rows(conn)
     assert len(totals) == 1 and totals[0]["scope"] == "total"
     assert len(_extracted_rows(conn, totals_only=False)) == 2
+
+
+def test_extracted_rows_eligible_only_filters_manual_review():
+    # Only trigger_eligible figures are what the pipeline acts on; manual_review
+    # figures are quarantined and must drop out of the acted-upon panel.
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    init_full_schema(conn)
+    _insert_fig(conn, "A-1", "total", review_status="trigger_eligible")
+    _insert_fig(conn, "A-2", "total", review_status="manual_review")
+    assert len(_extracted_rows(conn)) == 2
+    elig = _extracted_rows(conn, eligible_only=True)
+    assert len(elig) == 1 and elig[0]["accession"] == "A-1"
 
 
 def test_false_positive_hallucinated_figure():

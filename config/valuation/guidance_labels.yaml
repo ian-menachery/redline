@@ -126,9 +126,9 @@ labels:
 
   # =====================================================================
   # NEW never-seen panel accessions (2026-07-30), curated by INDEPENDENT
-  # EX-99.x reads. Only unambiguous $-LEVEL guidance is recorded here; the
-  # four percentage-growth accessions (MRNA x2, ULTA x2) are DEFERRED below
-  # pending a scoping decision (no $-level precedent in the existing gold).
+  # EX-99.x reads. Percentage growth-rate guidance is IN scope (Ian's decision,
+  # 2026-07-30): ULTA is included as unit=pct; MRNA is excluded as a one-sided
+  # aspiration (see the ULTA / MRNA blocks below for the resolution + quotes).
   # =====================================================================
 
   # ---- CVNA 0001690820-26-000054 (Q2 2026 release, 2026-07-29) ----
@@ -159,10 +159,15 @@ labels:
   # =====================================================================
 
   # ---- ULTA 0001104659-26-027061 (Q4/FY2025 release, 2026-03-12) ----
-  # Quote: "Provided fiscal 2026 guidance for net sales growth of 6.0% to 7.0%
-  # and diluted EPS growth of 9.4% to 11.4%". (Stated as growth rates here.)
-  - {ticker: ULTA, accession: "0001104659-26-027061", metric: revenue, period: FY2026, low: 6.0, high: 7.0,   unit: pct, basis: unspecified}
-  - {ticker: ULTA, accession: "0001104659-26-027061", metric: eps,     period: FY2026, low: 9.4, high: 11.4,  unit: pct, basis: unspecified}
+  # From the "Fiscal 2026 Outlook" TABLE (more authoritative than the summary
+  # bullet's growth-% framing): "Net sales growth 6% to 7%", "Operating income
+  # growth 6% to 9%", "Diluted earnings per share $28.05 to $28.55". EPS is
+  # recorded as the $-LEVEL the table states (consistent with 069464), not the
+  # bullet's growth %. Comparable-sales growth (2.5%-3.5%) and capex
+  # ($400M-$450M) are excluded (operational / not a scored metric).
+  - {ticker: ULTA, accession: "0001104659-26-027061", metric: revenue,          period: FY2026, low: 6.0,   high: 7.0,   unit: pct,           basis: unspecified}
+  - {ticker: ULTA, accession: "0001104659-26-027061", metric: operating_income, period: FY2026, low: 6.0,   high: 9.0,   unit: pct,           basis: unspecified}
+  - {ticker: ULTA, accession: "0001104659-26-027061", metric: eps,              period: FY2026, low: 28.05, high: 28.55, unit: usd_per_share, basis: unspecified}
 
   # ---- ULTA 0001104659-26-069464 (Q1 FY2026 release, 2026-06-02) ----
   # Quote (Updated Fiscal 2026 Outlook table): net sales growth "6% to 7%",

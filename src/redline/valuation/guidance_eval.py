@@ -31,6 +31,11 @@ EVENT_PREFIX = "guidance_extraction"
 # Held-out sub-panel = metrics scored over only the never-seen
 # (previously_observed=false) accessions of the registered panel.
 HELDOUT_PREFIX = "guidance_extraction_heldout"
+# Acted-upon sub-panel = metrics scored over only the figures the pipeline
+# actually consumes — those the confidence/basis gate marks trigger_eligible
+# (manual_review figures are quarantined and never reach the DCF). Measuring
+# precision on what the system acts on, analogous to the scope='total' filter.
+ELIGIBLE_PREFIX = "guidance_extraction_eligible"
 _DEFAULT_TOL = 0.02  # 2% relative on each range end
 
 
@@ -146,15 +151,26 @@ def load_registration(path: str | Path) -> dict | None:
     return None
 
 
-def _extracted_rows(conn: sqlite3.Connection, *, totals_only: bool = True) -> list[dict]:
+def _extracted_rows(
+    conn: sqlite3.Connection, *, totals_only: bool = True, eligible_only: bool = False
+) -> list[dict]:
     """Stored extractions to grade.
 
     By default only ``scope='total'`` figures. A segment / sub-component figure
     (e.g. "U.S. commercial revenue") is a *correctly-classified* extraction that
     the totals-only frozen gold has no entry for, so counting it as a false
     positive understates precision. Filtering to totals measures precision on
-    exactly what the gold covers (NOTES.md section 12, limitation 1)."""
-    where = "WHERE scope = 'total'" if totals_only else ""
+    exactly what the gold covers (NOTES.md section 12, limitation 1).
+
+    ``eligible_only`` further restricts to ``review_status='trigger_eligible'`` —
+    the figures the pipeline actually acts on (the confidence/basis gate
+    quarantines the rest as ``manual_review``)."""
+    clauses = []
+    if totals_only:
+        clauses.append("scope = 'total'")
+    if eligible_only:
+        clauses.append("review_status = 'trigger_eligible'")
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = conn.execute(
         f"SELECT accession, cik, metric, scope, period, low, high, unit, basis "
         f"FROM extracted_figures {where}"
@@ -227,6 +243,13 @@ def run_eval(config: RedlineConfig, conn: sqlite3.Connection, *, labels_path: st
             g_ho = [g for g in gold if g.get("accession") in heldout]
             e_ho = [e for e in extracted if e.get("accession") in heldout]
             _record_metrics(conn, e_ho, g_ho, tol=tol, f1_pass=f1_pass, prefix=HELDOUT_PREFIX)
+
+    # Acted-upon sub-panel: only trigger_eligible figures (what the DCF consumes),
+    # panel-restricted, scored against the same gold.
+    eligible = _extracted_rows(conn, eligible_only=True)
+    if registration:
+        eligible = [e for e in eligible if e.get("accession") in panel]
+    _record_metrics(conn, eligible, gold, tol=tol, f1_pass=f1_pass, prefix=ELIGIBLE_PREFIX)
     return overall
 
 

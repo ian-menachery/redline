@@ -21,27 +21,43 @@ Generated from the persisted `eval_runs` table by `python -m redline.eval.report
 
 Panel selected by mechanical Rule R, locked at `2026-07-30T13:58:28Z` (tag `guidance-eval-registration-v1`).
 
+### Headline
+
+- **Revenue guidance — the only figure the DCF consumes, trigger-eligible: precision 1.000 / recall 1.000.**
+- Confidence-gated overall (all metrics the pipeline acts on): precision 0.818 / recall 0.871 — the gate trades some recall for precision.
+- Raw, every extracted figure (incl. out-of-scope metrics the model never uses): precision 0.714 / recall 0.968.
+
 **Panel size:** full n = 12 accessions (6 companies); held-out (never-seen) n = 8 accessions (5 companies).
 
-**Full panel** (all registered accessions):
+**Full panel** — every extracted figure, all metrics (raw):
 
 | Metric | Precision | Recall | F1 | TP | FP | FN |
 |---|---|---|---|---|---|---|
 | comparable_sales | 0.000 | n/a | n/a | 0 | 2 | 0 |
 | ebitda | 1.000 | 1.000 | 1.000 | 1 | 0 | 0 |
 | eps | 0.833 | 0.833 | 0.833 | 5 | 1 | 1 |
-| operating_income | 0.750 | 1.000 | 0.857 | 9 | 3 | 0 |
+| operating_income | 0.833 | 1.000 | 0.909 | 10 | 2 | 0 |
 | other | 0.250 | 1.000 | 0.400 | 2 | 6 | 0 |
 | revenue | 0.923 | 1.000 | 0.960 | 12 | 1 | 0 |
 
-**Held-out sub-panel** (never-seen accessions only, `previously_observed: false`):
+**Acted-upon** — only trigger-eligible figures (what the DCF consumes; `manual_review` figures are quarantined by the gate):
+
+| Metric | Precision | Recall | F1 | TP | FP | FN |
+|---|---|---|---|---|---|---|
+| ebitda | 1.000 | 1.000 | 1.000 | 1 | 0 | 0 |
+| eps | 0.800 | 0.667 | 0.727 | 4 | 1 | 2 |
+| operating_income | 0.800 | 0.800 | 0.800 | 8 | 2 | 2 |
+| other | 0.400 | 1.000 | 0.571 | 2 | 3 | 0 |
+| revenue | 1.000 | 1.000 | 1.000 | 12 | 0 | 0 |
+
+**Held-out sub-panel** — never-seen accessions only (`previously_observed: false`):
 
 | Metric | Precision | Recall | F1 | TP | FP | FN |
 |---|---|---|---|---|---|---|
 | comparable_sales | 0.000 | n/a | n/a | 0 | 2 | 0 |
 | ebitda | 1.000 | 1.000 | 1.000 | 1 | 0 | 0 |
 | eps | 0.750 | 0.750 | 0.750 | 3 | 1 | 1 |
-| operating_income | 0.500 | 1.000 | 0.667 | 3 | 3 | 0 |
+| operating_income | 0.667 | 1.000 | 0.800 | 4 | 2 | 0 |
 | other | 0.000 | n/a | n/a | 0 | 6 | 0 |
 | revenue | 0.857 | 1.000 | 0.923 | 6 | 1 | 0 |
 
