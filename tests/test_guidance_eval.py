@@ -1,7 +1,10 @@
 """Tests for the guidance-extraction eval grader (`guidance_eval`)."""
 from __future__ import annotations
 
-from redline.valuation.guidance_eval import grade_guidance
+import sqlite3
+
+from redline.storage.schema import init_full_schema
+from redline.valuation.guidance_eval import _extracted_rows, grade_guidance
 
 
 def _g(accession="A1", metric="revenue", period="FY2026", low=12.95, high=13.1,
@@ -29,6 +32,31 @@ def test_f1_none_only_when_undefined():
     # No predictions AND no gold -> precision/recall undefined -> f1 None.
     empty = grade_guidance([], [])
     assert empty["precision"] is None and empty["recall"] is None and empty["f1"] is None
+
+
+def _insert_fig(conn, accession, scope):
+    conn.execute(
+        "INSERT INTO extracted_figures (accession, cik, metric, scope, period, "
+        "low, high, unit, basis, is_reaffirmed, confidence, review_status, "
+        "prompt_version, parser_version, extracted_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (accession, "0001", "revenue", scope, "FY2026", 1.0, 2.0, "usd_billions",
+         "unspecified", 0, 0.9, "trigger_eligible", "v1", "v1", "t"),
+    )
+
+
+def test_extracted_rows_totals_only_excludes_segment():
+    # Segment figures are correctly-classified extractions the totals-only gold
+    # can't match; scope=total is the default so they don't inflate FP.
+    conn = sqlite3.connect(":memory:")  # raw conn: FKs off, no filings_seen needed
+    conn.row_factory = sqlite3.Row
+    init_full_schema(conn)
+    _insert_fig(conn, "A-1", "total")
+    _insert_fig(conn, "A-2", "segment")
+
+    totals = _extracted_rows(conn)
+    assert len(totals) == 1 and totals[0]["scope"] == "total"
+    assert len(_extracted_rows(conn, totals_only=False)) == 2
 
 
 def test_false_positive_hallucinated_figure():

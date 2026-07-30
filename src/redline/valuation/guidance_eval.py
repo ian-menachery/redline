@@ -128,9 +128,18 @@ def load_gold(path: str | Path) -> list[dict]:
     return list(data or [])
 
 
-def _extracted_rows(conn: sqlite3.Connection) -> list[dict]:
+def _extracted_rows(conn: sqlite3.Connection, *, totals_only: bool = True) -> list[dict]:
+    """Stored extractions to grade.
+
+    By default only ``scope='total'`` figures. A segment / sub-component figure
+    (e.g. "U.S. commercial revenue") is a *correctly-classified* extraction that
+    the totals-only frozen gold has no entry for, so counting it as a false
+    positive understates precision. Filtering to totals measures precision on
+    exactly what the gold covers (NOTES.md section 12, limitation 1)."""
+    where = "WHERE scope = 'total'" if totals_only else ""
     rows = conn.execute(
-        "SELECT accession, cik, metric, period, low, high, unit, basis FROM extracted_figures"
+        f"SELECT accession, cik, metric, scope, period, low, high, unit, basis "
+        f"FROM extracted_figures {where}"
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -154,8 +163,12 @@ def run_eval(config: RedlineConfig, conn: sqlite3.Connection, *, labels_path: st
     tol = config.valuation.guidance_eval_tolerance
     f1_pass = config.valuation.guidance_eval_f1_pass
     gold = load_gold(path)
-    extracted = _extracted_rows(conn)
+    extracted = _extracted_rows(conn)  # scope='total' only
+    segment_excluded = conn.execute(
+        "SELECT COUNT(*) FROM extracted_figures WHERE scope != 'total'"
+    ).fetchone()[0]
     overall = grade_guidance(extracted, gold, tolerance=tol)
+    overall["segment_excluded"] = segment_excluded
 
     # Per-metric eval_runs rows (recompute per metric for a clean scorecard).
     for metric in {g["metric"] for g in gold} | {e["metric"] for e in extracted}:
@@ -180,8 +193,9 @@ def main(argv: list[str] | None = None) -> int:
         stats = run_eval(config, conn)
         p = stats["precision"]
         r = stats["recall"]
-        print(f"\nGuidance extraction — precision={p} recall={r} f1={stats['f1']} "
-              f"(tp={stats['tp']} fp={stats['fp']} fn={stats['fn']})")
+        print(f"\nGuidance extraction (scope=total) — precision={p} recall={r} "
+              f"f1={stats['f1']} (tp={stats['tp']} fp={stats['fp']} fn={stats['fn']}; "
+              f"{stats.get('segment_excluded', 0)} segment figures excluded from FP)")
         if stats["false_negatives"]:
             print("  MISSED (false negatives):")
             for fn in stats["false_negatives"]:

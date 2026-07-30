@@ -115,6 +115,14 @@ def render_eval_markdown(rows: list[dict]) -> str:
             out.append(f"| {ticker} | {'yes' if r['graded_pass'] else 'no'} |")
         out.append("")
 
+    out += [
+        "## Reproducibility", "",
+        "The graded eval runs deterministically against an isolated, "
+        "freshly-seeded database, so a result never depends on prior state:", "",
+        "```",
+        "python -m redline.eval.harness --all --db-path data/eval_run.db --fresh",
+        "```", "",
+    ]
     return "\n".join(out) + "\n"
 
 
