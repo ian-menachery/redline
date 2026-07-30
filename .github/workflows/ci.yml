@@ -25,7 +25,7 @@ jobs:
           # requirements.txt carries the runtime deps + an editable install of
           # the package (`-e .`); ruff/mypy are the dev tools.
           pip install -r requirements.txt
-          pip install ruff mypy
+          pip install ruff mypy pytest-cov
       - name: Lint (ruff)
         run: ruff check .
       - name: Type-check (mypy)
