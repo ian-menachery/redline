@@ -20,6 +20,7 @@ import datetime
 import sqlite3
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel
@@ -33,7 +34,7 @@ _YEAR_SPAN_TOLERANCE_DAYS = 60
 
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _safe(fn) -> float | None:
@@ -55,7 +56,7 @@ def load_fcf_mapping(path: str | Path) -> dict[str, list[str]]:
 
 
 def build_base_from_edgar(
-    ticker: str, cik: str, *, company_factory: Callable[[str], object],
+    ticker: str, cik: str, *, company_factory: Callable[[str], Any],
     mapping: dict[str, list[str]],
 ) -> XbrlBase:
     """Build the DCF base from edgartools canonical accessors.

@@ -1,8 +1,6 @@
 """Tests for the guidance-extraction eval grader (`guidance_eval`)."""
 from __future__ import annotations
 
-import pytest
-
 from redline.valuation.guidance_eval import grade_guidance
 
 

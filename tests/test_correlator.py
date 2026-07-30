@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from unittest.mock import MagicMock
 
 import pytest
@@ -19,7 +18,6 @@ from redline.config import (
 )
 from redline.correlator.analyzer import _sweep_form4_to_analyzed, run_once
 from redline.correlator.signals import (
-    MIN_BASELINE_TRADES,
     Trade,
     cluster_signal,
     direction_flip_signal,
@@ -30,7 +28,6 @@ from redline.correlator.signals import (
 from redline.llm.schemas import CorrelatorVerdict
 from redline.storage.db import connect
 from redline.storage.schema import init_full_schema, seed_watchlist_from_yaml
-
 
 # ---- fixtures -------------------------------------------------------------
 

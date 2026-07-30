@@ -46,7 +46,7 @@ with open_db(cfg.storage.db_path) as conn:
             PRIOR_ACCESSION, cik, f.form,
             str(getattr(f, "period_of_report", None)),
             str(f.filing_date),
-            datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            datetime.datetime.now(datetime.UTC).isoformat(),
         ),
     )
     if cur.rowcount > 0:

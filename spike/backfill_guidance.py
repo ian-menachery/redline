@@ -26,7 +26,7 @@ N_PERIODIC = 3      # recent 10-Q/10-K per name (realism; not load-bearing)
 
 
 def _now() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _insert(conn, *, accession, cik, form, filed_at) -> int:

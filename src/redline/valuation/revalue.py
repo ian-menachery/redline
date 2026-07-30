@@ -27,6 +27,7 @@ import logging
 import sqlite3
 import sys
 from collections.abc import Callable
+from typing import Any, cast
 
 import edgar
 
@@ -57,7 +58,7 @@ _LINKED_INPUTS = ("base_revenue", "net_debt", "shares_diluted", "fiscal_year")
 
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _latest_periodic(conn: sqlite3.Connection, cik: str) -> sqlite3.Row | None:
@@ -171,7 +172,7 @@ def _insert_valuation(
                 MODEL_VERSION, _now_iso(), None,
             ),
         )
-        valuation_id = cur.lastrowid
+        valuation_id = cast(int, cur.lastrowid)  # SQLite sets lastrowid after INSERT
         _insert_input_links(conn, valuation_id=valuation_id,
                             current=snapshot, prior=prior_snapshot)
         for link in (extra_links or []):
@@ -219,7 +220,7 @@ def run_once(
     config: RedlineConfig,
     conn: sqlite3.Connection,
     *,
-    company_factory: Callable[[str], object] = edgar.Company,
+    company_factory: Callable[[str], Any] = edgar.Company,
     force: bool = False,
 ) -> dict:
     """One revaluation pass over the DCF-eligible watchlist companies."""
@@ -340,7 +341,7 @@ def run_guidance_revaluations(
     config: RedlineConfig,
     conn: sqlite3.Connection,
     *,
-    company_factory: Callable[[str], object] | None = None,
+    company_factory: Callable[[str], Any] | None = None,
 ) -> dict:
     """Revalue when a filed 8-K revenue-guidance figure moves the year-1 input.
 

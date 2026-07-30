@@ -9,8 +9,11 @@ This script checks: does edgartools surface the checkbox, or do we have to
 parse raw XML / free-text remarks ourselves?
 """
 from __future__ import annotations
+
 import sys
-from edgar import find as find_filing, set_identity
+
+from edgar import find as find_filing
+from edgar import set_identity
 
 set_identity("Redline hatcher.ry@northeastern.edu")
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -76,7 +79,7 @@ head("5. to_dataframe — full column listing")
 df = form4.to_dataframe()
 print(f"  shape: {df.shape}")
 print(f"  columns: {list(df.columns)}")
-print(f"  dtypes:")
+print("  dtypes:")
 for col, dt in df.dtypes.items():
     print(f"    {col}: {dt}")
 

@@ -121,7 +121,7 @@ class RedlineConfig(BaseModel):
     valuation: ValuationConfig = Field(default_factory=ValuationConfig)
 
     @classmethod
-    def from_toml(cls, path: str | Path = "config/settings.toml") -> "RedlineConfig":
+    def from_toml(cls, path: str | Path = "config/settings.toml") -> RedlineConfig:
         with Path(path).open("rb") as f:
             data = tomllib.load(f)
         # REDLINE_DB_PATH overrides storage.db_path. Used by the hosted

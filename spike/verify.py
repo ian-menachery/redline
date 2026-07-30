@@ -17,7 +17,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from edgar import Company, set_identity, find as find_filing
+from edgar import Company, set_identity
+from edgar import find as find_filing
 
 set_identity("Redline hatcher.ry@northeastern.edu")
 

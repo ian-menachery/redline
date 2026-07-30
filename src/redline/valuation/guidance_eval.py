@@ -55,7 +55,7 @@ _UNIT_FACTOR = {
 def _abs_magnitude(value: float | None, unit: str | None) -> float | None:
     if value is None:
         return None
-    factor = _UNIT_FACTOR.get(unit)
+    factor = _UNIT_FACTOR.get(unit) if unit is not None else None
     return value * factor if factor is not None else value
 
 
@@ -142,7 +142,7 @@ def _record(conn: sqlite3.Connection, metric: str, stats: dict, *, f1_pass: floa
                judge_result, graded_pass, subsystems_tested, notes)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (str(uuid.uuid4()), f"{EVENT_PREFIX}:{metric}",
-         datetime.datetime.now(datetime.timezone.utc).isoformat(),
+         datetime.datetime.now(datetime.UTC).isoformat(),
          None, passed, json.dumps(stats, default=str), passed,
          json.dumps(["valuation"]), None),
     )

@@ -24,10 +24,10 @@ import json
 import logging
 import sqlite3
 import sys
-from typing import Any
+from typing import Any, cast
 
 from redline.config import RedlineConfig
-from redline.diff.filter import Stage1Change, stage1_filter
+from redline.diff.filter import stage1_filter
 from redline.diff.gate import PROMPT_VERSION as GATE_PROMPT_VERSION
 from redline.diff.gate import gate as stage2_gate
 from redline.diff.summarize import PROMPT_VERSION as SUMMARY_PROMPT_VERSION
@@ -49,7 +49,7 @@ SECTIONS: list[str] = ["mdna", "risk_factors", "legal", "qdmr"]
 # ---------------------------------------------------------------------------
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _pending_rows(
@@ -131,7 +131,7 @@ def _insert_diff_result(
             materiality, prompt_version, _now_iso(),
         ),
     )
-    return cur.lastrowid
+    return cast(int, cur.lastrowid)
 
 
 def _insert_flagged_event(
@@ -151,7 +151,7 @@ def _insert_flagged_event(
             materiality_max, _now_iso(),
         ),
     )
-    return cur.lastrowid
+    return cast(int, cur.lastrowid)
 
 
 def _mark_analyzed(conn: sqlite3.Connection, accession: str) -> None:

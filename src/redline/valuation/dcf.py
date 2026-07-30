@@ -37,7 +37,7 @@ class DcfDrivers(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _equal_lengths(self) -> "DcfDrivers":
+    def _equal_lengths(self) -> DcfDrivers:
         lengths = {
             len(self.revenue_growth), len(self.operating_margin),
             len(self.capex_pct_revenue), len(self.da_pct_revenue),
@@ -67,7 +67,7 @@ class DcfInputs(BaseModel):
     drivers: DcfDrivers
 
     @model_validator(mode="after")
-    def _gordon_convergence(self) -> "DcfInputs":
+    def _gordon_convergence(self) -> DcfInputs:
         if self.terminal_growth >= self.wacc:
             raise ValueError("terminal_growth must be strictly less than wacc (Gordon growth)")
         return self
@@ -106,7 +106,7 @@ class ScenarioBand(BaseModel):
     bull: DcfResult
 
     @model_validator(mode="after")
-    def _ordered(self) -> "ScenarioBand":
+    def _ordered(self) -> ScenarioBand:
         # A mis-signed scenario delta in assumptions.yaml (e.g. a positive bear
         # growth_delta) would otherwise produce a silently inverted range that
         # the per_share_low/high property names claim is ordered.

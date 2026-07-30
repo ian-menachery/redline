@@ -41,7 +41,7 @@ EVENT_PREFIX = "fcf_validation"
 
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _rel_error(a: float | None, b: float | None) -> float | None:

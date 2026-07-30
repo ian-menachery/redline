@@ -117,7 +117,7 @@ def _is_issuer_placeholder(
 # ---------------------------------------------------------------------------
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _maybe_call(value: Any) -> Any:
@@ -531,7 +531,6 @@ def run_once(config: RedlineConfig, conn: sqlite3.Connection) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
-    import sys
 
     parser = argparse.ArgumentParser(description="EDGAR fetcher + parser for redline.")
     parser.add_argument("--once", action="store_true",

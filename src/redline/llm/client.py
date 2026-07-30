@@ -266,6 +266,7 @@ class LLMClient:
 
             latency_ms = int((time.monotonic() - start) * 1000)
             usage = resp.usage
+            assert usage is not None  # a completed parse always carries usage
             # OpenAI's automatic prompt caching reports cached_tokens under
             # prompt_tokens_details (when available on the SDK version + model).
             details = getattr(usage, "prompt_tokens_details", None)
@@ -336,7 +337,7 @@ class LLMClient:
                 resp = self._anthropic.messages.parse(
                     model=model,
                     max_tokens=max_tokens,
-                    system=sys_blocks,
+                    system=sys_blocks,  # type: ignore[arg-type]  # list[dict] blocks are valid at runtime
                     messages=[{"role": "user", "content": user}],
                     output_format=schema,
                 )

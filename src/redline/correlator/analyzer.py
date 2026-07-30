@@ -26,6 +26,7 @@ import sys
 
 from redline.config import RedlineConfig
 from redline.correlator.signals import (
+    ClusterSignal,
     Trade,
     cluster_signal,
     direction_flip_signal,
@@ -47,7 +48,7 @@ TRIGGER_TYPES: list[str] = ["10-K", "10-Q", "8-K"]
 # ---------------------------------------------------------------------------
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _load_prompt(prompts_dir: str = "config/prompts") -> str:
@@ -130,7 +131,7 @@ def _sweep_form4_to_analyzed(conn: sqlite3.Connection) -> int:
 
 def _build_user_message(
     *, ticker: str, filing_type: str, filed_at: str,
-    trades: list[Trade], cluster: dict, per_insider: list[dict],
+    trades: list[Trade], cluster: ClusterSignal, per_insider: list[dict],
     window_days: int,
 ) -> str:
     lines: list[str] = [

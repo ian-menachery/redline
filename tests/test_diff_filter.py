@@ -18,7 +18,6 @@ from redline.diff.filter import (
     stage1_filter,
 )
 
-
 # ----- regexes -------------------------------------------------------------
 
 

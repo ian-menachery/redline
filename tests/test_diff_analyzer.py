@@ -13,10 +13,7 @@ Covers:
 """
 from __future__ import annotations
 
-import datetime
 import json
-import sqlite3
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -32,9 +29,6 @@ from redline.config import (
     StorageConfig,
 )
 from redline.diff.analyzer import run_once
-
-# Retry cap now lives in PollerConfig; pin its default here for the retry tests.
-MAX_RETRIES = 3  # == PollerConfig.max_retries default
 from redline.llm.schemas import DiffGateDecision, DiffSummary
 from redline.storage.db import connect
 from redline.storage.schema import (
@@ -42,6 +36,8 @@ from redline.storage.schema import (
     seed_watchlist_from_yaml,
 )
 
+# Retry cap now lives in PollerConfig; pin its default here for the retry tests.
+MAX_RETRIES = 3  # == PollerConfig.max_retries default
 
 # ----- fixtures ------------------------------------------------------------
 
@@ -134,12 +130,12 @@ def _build_client_mock(
             try:
                 return next(gate_iter)
             except StopIteration:
-                raise AssertionError("Unexpected extra Stage 2 call")
+                raise AssertionError("Unexpected extra Stage 2 call") from None
         if schema is DiffSummary:
             try:
                 return next(summary_iter)
             except StopIteration:
-                raise AssertionError("Unexpected extra Stage 3 call")
+                raise AssertionError("Unexpected extra Stage 3 call") from None
         raise AssertionError(f"Unexpected schema {schema}")
 
     client.complete = MagicMock(side_effect=_complete)

@@ -77,7 +77,7 @@ class CompanyAssumptions(BaseModel):
     low_confidence_note: str | None = None  # e.g. MRNA: declining revenue, negative FCF
 
     @model_validator(mode="after")
-    def _terminal_below_wacc(self) -> "CompanyAssumptions":
+    def _terminal_below_wacc(self) -> CompanyAssumptions:
         tg = self.terminal_growth
         if tg is not None and tg >= self.wacc:
             raise ValueError(f"{self.ticker}: terminal_growth must be < wacc")

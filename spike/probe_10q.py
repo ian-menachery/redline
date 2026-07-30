@@ -5,8 +5,11 @@ we care about, despite the items being listed. This script tries every
 plausible access pattern to find the one that actually returns text.
 """
 from __future__ import annotations
+
 import sys
-from edgar import find as find_filing, set_identity
+
+from edgar import find as find_filing
+from edgar import set_identity
 
 set_identity("Redline hatcher.ry@northeastern.edu")
 

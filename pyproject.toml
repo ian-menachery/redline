@@ -4,9 +4,41 @@ version = "0.2.0"
 description = "Scheduled SEC EDGAR monitoring with QoQ section diffs + Form 4 correlation."
 requires-python = ">=3.11"
 
+[project.optional-dependencies]
+dev = ["ruff>=0.6", "mypy>=1.11", "pytest>=8"]
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# spike/ holds throwaway feasibility diagnostics, not shipped code.
+extend-exclude = ["spike"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# Line length is not enforced (long SQL strings / provenance comments are
+# clearer unwrapped); the editor/formatter handles wrapping. The valuable E
+# rules (imports-at-top, statement style) stay on.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# __init__.py re-exports are intentional.
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/redline"]
+# edgartools / streamlit / openai-beta surfaces are untyped or partially typed.
+ignore_missing_imports = true
+# Pragmatic baseline for a first pass; tighten (disallow_untyped_defs) later.
+warn_unused_ignores = true
+warn_redundant_casts = true

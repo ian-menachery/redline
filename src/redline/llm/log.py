@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime
 import sqlite3
+from typing import cast
 
 
 def log_call(
@@ -34,13 +35,13 @@ def log_call(
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            datetime.datetime.now(datetime.UTC).isoformat(),
             call_site, provider, model, prompt_version,
             tokens_in, tokens_out, cost_usd, latency_ms, int(cache_hit),
             status, error_reason,
         ),
     )
-    return cur.lastrowid
+    return cast(int, cur.lastrowid)
 
 
 def log_provider_switch(

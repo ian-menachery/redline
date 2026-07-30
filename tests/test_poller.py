@@ -9,7 +9,6 @@ Mocks ``edgar.Company`` so tests are deterministic and offline. Covers:
 """
 from __future__ import annotations
 
-import sqlite3
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -28,7 +27,6 @@ from redline.config import (
 from redline.poller import run_once
 from redline.storage.db import connect
 from redline.storage.schema import init_full_schema, seed_watchlist_from_yaml
-
 
 # ----- fixtures ------------------------------------------------------------
 

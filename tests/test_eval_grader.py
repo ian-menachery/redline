@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import datetime
 import json
-import sqlite3
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -19,7 +18,6 @@ from redline.eval.models import EvalEvent
 from redline.llm.schemas import EvalJudgeVerdict
 from redline.storage.db import connect
 from redline.storage.schema import init_full_schema, seed_watchlist_from_yaml
-
 
 # ----- normalize_pass_criteria --------------------------------------------
 
@@ -205,7 +203,7 @@ def _event(*, pass_criteria: str, rubric: str = "Did the system catch X?") -> Ev
         id="test_event", ticker="PLTR", filing_type="10-Q", period="Q3 2024",
         tests=["diff_analyzer"],
         pass_criteria=pass_criteria, llm_judge_rubric=rubric,
-        locked_at=datetime.datetime(2026, 5, 11, 17, 30, tzinfo=datetime.timezone.utc),
+        locked_at=datetime.datetime(2026, 5, 11, 17, 30, tzinfo=datetime.UTC),
     )
 
 

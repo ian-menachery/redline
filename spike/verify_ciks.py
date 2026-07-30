@@ -7,6 +7,7 @@ issuer name, and print a YAML-ready table.
 from __future__ import annotations
 
 import sys
+
 from edgar import Company, set_identity
 
 set_identity("Redline hatcher.ry@northeastern.edu")

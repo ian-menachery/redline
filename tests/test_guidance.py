@@ -46,7 +46,7 @@ class _Filing:
 def db(tmp_path):
     conn = connect(tmp_path / "t.db")
     init_full_schema(conn)
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
     conn.execute("INSERT INTO watchlist (cik,ticker,name,sector,added_at) VALUES (?,?,?,?,?)",
                  (CIK, "VRTX", "Vertex", "healthcare", now))
     yield conn
@@ -172,7 +172,7 @@ def test_run_once_suppresses_phantom_nulls(db, monkeypatch):
         has_guidance=True,
         figures=[_fig(), _fig(metric="operating_income", low=None, high=None, context="GAAP op income each quarter")],
     )
-    summary = guidance.run_once(_cfg(), db, client)
+    guidance.run_once(_cfg(), db, client)
     assert db.execute("SELECT COUNT(*) c FROM extracted_figures").fetchone()["c"] == 1
     assert db.execute(
         "SELECT COUNT(*) c FROM extracted_figures WHERE low IS NULL AND high IS NULL"

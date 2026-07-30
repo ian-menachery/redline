@@ -16,8 +16,6 @@ from __future__ import annotations
 
 import datetime
 import json
-import sqlite3
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -459,7 +457,7 @@ def test_failed_permanent_after_max_retries(db):
 
 def test_recent_parse_failed_not_picked_up(db):
     """parse_failed rows attempted within the retry window are skipped."""
-    just_now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    just_now = datetime.datetime.now(datetime.UTC).isoformat()
     _seed_filing(db, accession="acc-recent-fail", filing_type="10-Q",
                  status="parse_failed", retry_count=1, last_attempted=just_now)
     with patch("redline.fetcher.edgar") as mock_edgar:
@@ -472,7 +470,7 @@ def test_recent_parse_failed_not_picked_up(db):
 
 def test_old_parse_failed_picked_up(db):
     """parse_failed rows attempted longer than RETRY_AFTER_HOURS ago retry."""
-    old = (datetime.datetime.now(datetime.timezone.utc)
+    old = (datetime.datetime.now(datetime.UTC)
            - datetime.timedelta(hours=2)).isoformat()
     _seed_filing(db, accession="acc-old-fail", filing_type="10-Q",
                  status="parse_failed", retry_count=1, last_attempted=old)

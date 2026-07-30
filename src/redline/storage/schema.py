@@ -298,7 +298,7 @@ def seed_watchlist_from_yaml(conn: sqlite3.Connection, path: str | Path) -> int:
     """
     with Path(path).open(encoding="utf-8") as f:
         entries = yaml.safe_load(f)
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
     inserted = 0
     for entry in entries:
         cur = conn.execute(

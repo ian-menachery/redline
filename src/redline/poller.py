@@ -36,7 +36,7 @@ TRACKED_FORMS: list[str] = ["10-K", "10-Q", "8-K", "4"]
 # ---------------------------------------------------------------------------
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _known_accessions(conn: sqlite3.Connection, cik: str) -> set[str]:

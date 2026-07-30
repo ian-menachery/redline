@@ -25,7 +25,7 @@ from __future__ import annotations
 import datetime
 import logging
 import sqlite3
-from typing import Callable
+from collections.abc import Callable
 
 import edgar
 
@@ -44,11 +44,11 @@ _LOG = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _ensure_filings_seen_row(
-    conn: sqlite3.Connection, filing: edgar.EntityFiling,  # type: ignore[attr-defined]
+    conn: sqlite3.Connection, filing: edgar.EntityFiling,
 ) -> str:
     """Insert (idempotently) one filings_seen row at status='fetched'.
 
@@ -77,7 +77,7 @@ def _ensure_filings_seen_row(
 
 def _fetch_period_filing(
     *, ticker: str, form: str, period_label: str,
-) -> edgar.EntityFiling | None:  # type: ignore[name-defined]
+) -> edgar.EntityFiling | None:
     """Find the filing for ``ticker`` of ``form`` covering ``period_label``.
 
     ``period_label`` examples: ``"FY2022"`` -> period_of_report = 2022-12-31
@@ -127,11 +127,11 @@ def _period_label_to_iso(label: str) -> str | None:
 
 def _find_prior_period_10k(
     *, ticker: str, current_filed_date: str,
-) -> edgar.EntityFiling | None:  # type: ignore[name-defined]
+) -> edgar.EntityFiling | None:
     """The 10-K filed immediately before ``current_filed_date`` for ``ticker``."""
     company = edgar.Company(ticker)
     candidates = company.get_filings(form="10-K")
-    best: edgar.EntityFiling | None = None  # type: ignore[name-defined]
+    best: edgar.EntityFiling | None = None
     best_date = ""
     for f in candidates:
         fd = str(f.filing_date)

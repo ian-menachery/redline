@@ -27,6 +27,7 @@ import sqlite3
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import edgar
 
@@ -48,7 +49,7 @@ _REAFFIRM_TOL = 0.005  # midpoint within 0.5% -> treated as reaffirmed, not rais
 
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _load_prompt(prompts_dir: str | Path) -> str:
@@ -218,7 +219,7 @@ def run_once(
     conn: sqlite3.Connection,
     client: LLMClient,
     *,
-    filing_factory: Callable[[str], object] | None = None,
+    filing_factory: Callable[[str], Any] | None = None,
 ) -> dict:
     """Extract guidance from unprocessed item-2.02 8-Ks for the DCF names."""
     if filing_factory is None:

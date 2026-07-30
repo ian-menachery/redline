@@ -42,7 +42,7 @@ _PROMPT_VERSIONS = {
 
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _record_eval_run(
@@ -182,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     # Windows cp1252 stdout fallback for any non-ASCII in INFO logs.
     try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
     except (AttributeError, OSError):
         pass
 

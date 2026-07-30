@@ -53,7 +53,7 @@ def _factory(revenue, fcf):
 def db(tmp_path):
     conn = connect(tmp_path / "t.db")
     init_full_schema(conn)
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
     conn.executemany(
         "INSERT INTO watchlist (cik, ticker, name, sector, added_at) VALUES (?,?,?,?,?)",
         [(PLTR_CIK, "PLTR", "Palantir", "tech", now),

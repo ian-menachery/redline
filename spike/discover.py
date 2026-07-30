@@ -35,7 +35,7 @@ def probe_pltr_10q():
     print(f"  total 10-Qs: {len(filings)}")
 
     latest5 = filings.latest(5) if hasattr(filings, "latest") else list(filings)[:5]
-    print(f"  latest 5:")
+    print("  latest 5:")
     for f in latest5:
         print(f"    {getattr(f, 'filing_date', '?')}  {getattr(f, 'accession_no', '?')}")
 
@@ -56,7 +56,7 @@ def probe_pltr_form4():
     print(f"  total Form 4s: {len(form4s)}")
 
     latest5 = form4s.latest(5) if hasattr(form4s, "latest") else list(form4s)[:5]
-    print(f"  latest 5:")
+    print("  latest 5:")
     for f in latest5:
         print(f"    {getattr(f, 'filing_date', '?')}  {getattr(f, 'accession_no', '?')}")
 

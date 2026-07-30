@@ -34,7 +34,7 @@ def _fact(concept, fy, val, *, fp="FY", start="2024-01-01", end="2024-12-31",
 def db(tmp_path):
     conn = connect(tmp_path / "t.db")
     init_full_schema(conn)
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
     conn.executemany(
         "INSERT INTO watchlist (cik, ticker, name, sector, added_at) VALUES (?,?,?,?,?)",
         [

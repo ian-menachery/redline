@@ -37,7 +37,6 @@ from redline.llm.client import LLMClient, _is_openai_quota_exhausted
 from redline.llm.schemas import DiffGateDecision, DiffSummary
 from redline.storage.db import init_schema
 
-
 # ----- helpers -------------------------------------------------------------
 
 

@@ -48,7 +48,7 @@ DO UPDATE SET
 
 
 def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def dcf_eligible_companies(conn: sqlite3.Connection) -> list[sqlite3.Row]:
