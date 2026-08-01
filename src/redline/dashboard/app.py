@@ -12,6 +12,7 @@ Launch: ``streamlit run src/redline/dashboard/app.py``.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 
 import streamlit as st
@@ -47,9 +48,14 @@ from redline.storage.db import connect
 @st.cache_resource
 def _conn() -> sqlite3.Connection:
     config = RedlineConfig.from_toml("config/settings.toml")
-    return connect(
-        config.storage.db_path, read_only=True, check_same_thread=False,
-    )
+    # Cloud safety: a REDLINE_DB_PATH secret wins; otherwise use the configured
+    # DB, but if it's absent (e.g. the gitignored data/redline.db on Streamlit
+    # Cloud) fall back to the committed demo snapshot rather than connecting to
+    # an empty DB and crashing on the first query. Mirrors valuation_app._conn.
+    db_path = os.environ.get("REDLINE_DB_PATH") or config.storage.db_path
+    if not os.path.exists(db_path):
+        db_path = "data/demo.db"
+    return connect(db_path, read_only=True, check_same_thread=False)
 
 
 # ---------------------------------------------------------------------------

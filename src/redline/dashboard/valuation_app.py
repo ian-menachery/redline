@@ -281,12 +281,14 @@ def _valuation_card(v: dict, ticker: str) -> None:
                        help="Bull-case per-share estimate (high end of the modeled range).")
         ref, asof = v.get("ref"), v.get("asof")
         if ref:
-            disp, stale = _fmt_asof(asof)
+            # The demo reads a frozen snapshot, so "stale vs. today()" is
+            # meaningless here — show the reference as a fixed as-of fact rather
+            # than a freshness judgment that would silently flip to "stale" ~120
+            # days after the snapshot date. (The staleness check still lives in
+            # _fmt_asof for live use.)
+            disp, _stale = _fmt_asof(asof)
             suffix = f"reference price ${ref:,.2f} (as of {disp})"
-            if stale:
-                st.caption(data.md_escape(f":grey[{suffix} — reference may be stale]"))
-            else:
-                st.caption(data.md_escape(f"Estimated value range vs. {suffix}."))
+            st.caption(data.md_escape(f"Estimated value range vs. {suffix}."))
         st.caption("A modeled range from the company's own reported cash flows — "
                    "not a recommendation.")
         if v.get("bear") is not None:
@@ -373,7 +375,8 @@ def page_valuations() -> None:
         c1, c2 = st.columns([3, 2])
         with c1:
             st.markdown(
-                f"An **8-K earnings release** (filed {m['filed_at']}) raised management's "
+                f"An **8-K earnings release** (filed {data._humanize_date(m['filed_at'])[0]}) "
+                f"raised management's "
                 f"full-year revenue guidance. Redline extracted the figure and updated the "
                 f"model's year-1 revenue growth "
                 f"**{m['old_growth']:.1%} → {m['new_growth']:.1%}**, then recomputed — "
@@ -413,10 +416,16 @@ def page_disclosure() -> None:
         min_materiality=0.0, limit=data._EVENT_LIMIT,
     )
     if not findings:
-        st.markdown(
-            f"The full interactive disclosure monitor runs as a dedicated app: "
-            f"[{_EDGAR_APP_URL}]({_EDGAR_APP_URL})."
-        )
+        # This snapshot carries no flagged events (the disclosure findings live in
+        # the dedicated app's snapshot). Show a deliberate hand-off card so the
+        # tab reads as intentional, not an empty/unfinished page.
+        with st.container(border=True):
+            st.markdown(
+                "**The disclosure monitor is a dedicated app.**\n\n"
+                "Quarter-over-quarter 10-K/10-Q diff findings and Form 4 correlations "
+                "are served — with full drill-down — at the companion deployment:\n\n"
+                f"→ **[{_EDGAR_APP_URL}]({_EDGAR_APP_URL})**"
+            )
         return
     mats = [f["materiality_max"] for f in findings if f["materiality_max"] is not None]
     if mats:
