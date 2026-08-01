@@ -4,6 +4,9 @@
 # redline.dashboard.data (shared query layer); these comment bumps force
 # Streamlit Cloud to reinstall the editable package so new modules deploy.
 # Rev 2026-07-30b: added redline.dashboard.data.
+# Rev 2026-08-01: dashboards add ui.page_css() + data.md_escape(); bump forces
+# Streamlit Cloud to reinstall the editable package so these new attrs deploy
+# (stale-venv gotcha — see the streamlit-cloud-stale-editable-install memory).
 
 # Install the local redline package itself (src-layout). Streamlit Cloud
 # runs `pip install -r requirements.txt` and would otherwise fail at
