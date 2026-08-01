@@ -1,10 +1,10 @@
 # Redline
 
-[![CI](https://github.com/ian-menachery/redline/actions/workflows/ci.yml/badge.svg)](https://github.com/ian-menachery/redline/actions/workflows/ci.yml) ![tests](https://img.shields.io/badge/tests-242%20passing-2c7a3f) ![coverage](https://img.shields.io/badge/coverage-%E2%89%A570%25-2c7a3f) ![python](https://img.shields.io/badge/python-3.11%2B-3776ab) ![ruff](https://img.shields.io/badge/lint-ruff-261230) ![mypy](https://img.shields.io/badge/types-mypy-2a6db2) ![llm](https://img.shields.io/badge/llm-OpenAI%20%2B%20Anthropic-1e3a5f) ![dashboard](https://img.shields.io/badge/dashboard-Streamlit-ff4b4b) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
+[![CI](https://github.com/ian-menachery/redline/actions/workflows/ci.yml/badge.svg)](https://github.com/ian-menachery/redline/actions/workflows/ci.yml) ![tests](https://img.shields.io/badge/tests-246%20passing-2c7a3f) ![coverage](https://img.shields.io/badge/coverage-%E2%89%A570%25-2c7a3f) ![python](https://img.shields.io/badge/python-3.11%2B-3776ab) ![ruff](https://img.shields.io/badge/lint-ruff-261230) ![mypy](https://img.shields.io/badge/types-mypy-2a6db2) ![llm](https://img.shields.io/badge/llm-OpenAI%20%2B%20Anthropic-1e3a5f) ![dashboard](https://img.shields.io/badge/dashboard-Streamlit-ff4b4b) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
 Scheduled SEC EDGAR monitoring for a fixed 8-ticker watchlist. Detects substantive QoQ/YoY changes in 10-K / 10-Q section disclosures via a three-stage diff filter, joins Form 4 insider transactions to filing events on a ±14-day window, and surfaces flagged events through a Streamlit dashboard. Includes a pre-registered eval harness measuring accuracy against historical filing events.
 
-**Status:** Phase 1 MVP complete, plus a shipped DCF valuation layer (Subsystem 7). **2/3** on the 3 of 12 pre-registered graded events (tag [`eval-pre-registration-v1`](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1)); the 8-K guidance-extraction eval was separately expanded to a mechanically-selected, locked 12-accession panel (tag [`guidance-eval-registration-v1`](https://github.com/ian-menachery/redline)). 242 tests passing (≥70% coverage, CI-gated). Published results: [`EVAL.md`](EVAL.md). Total real LLM spend across the entire build: **$2.00** ($1.27 OpenAI + $0.73 Anthropic, under a $3 hard cap).
+**Status:** Phase 1 MVP complete, plus a shipped DCF valuation layer (Subsystem 7). **2/3** on the 3 of 12 pre-registered graded events (tag [`eval-pre-registration-v1`](https://github.com/ian-menachery/redline/releases/tag/eval-pre-registration-v1)); the 8-K guidance-extraction eval was separately expanded to a mechanically-selected, locked 12-accession panel (tag [`guidance-eval-registration-v1`](https://github.com/ian-menachery/redline)). 246 tests passing (≥70% coverage, CI-gated). Published results: [`EVAL.md`](EVAL.md). Total real LLM spend across the entire build: **$2.00** ($1.27 OpenAI + $0.73 Anthropic, under a $3 hard cap).
 
 **Live demos:** [redline-edgar.streamlit.app](https://redline-edgar.streamlit.app/) (disclosure monitor) and [redline-valuations.streamlit.app](https://redline-valuations.streamlit.app/) (DCF valuation dashboard).
 
@@ -28,8 +28,8 @@ Scheduled SEC EDGAR monitoring for a fixed 8-ticker watchlist. Detects substanti
 | Cadence | 15-minute polling, EDGAR fair-access compliant |
 | LLM provider | OpenAI today (`gpt-4o-mini` cheap-role + `gpt-4o` quality-role), automatic fallover to Anthropic on `insufficient_quota` |
 | Pipeline state machine | `fetched → parsed → analyzed → flagged` with retry queue (3 retries, 1-hour window) |
-| Tests | 223 passing (≥70% coverage) |
-| Real LLM spend across the entire build | $1.76 ($1.27 OpenAI + $0.49 Anthropic) |
+| Tests | 246 passing (≥70% coverage) |
+| Real LLM spend across the entire build | $2.00 ($1.27 OpenAI + $0.73 Anthropic) |
 
 ---
 
@@ -195,7 +195,7 @@ All locked in [`CLAUDE.md`](CLAUDE.md) §4. Each survived a critical review pass
 - **`edgartools`** for EDGAR access
 - **OpenAI SDK** + **Anthropic SDK** behind a provider-agnostic client with exception-driven fallover
 - **Streamlit** for the dashboard
-- **pytest** — 223 tests (≥70% coverage, CI-gated) covering parsers, three-stage filter, anomaly signals, eval grader, LLM client, storage, the DCF valuation layer (DCF engine, FCF reconstruction, XBRL ingest, guidance extraction + its precision/recall grader, revaluation hook), and the dashboard chart builders
+- **pytest** — 246 tests (≥70% coverage, CI-gated) covering parsers, three-stage filter, anomaly signals, eval grader, LLM client, storage, the DCF valuation layer (DCF engine, FCF reconstruction, XBRL ingest, guidance extraction + its precision/recall grader, revaluation hook), and the dashboard chart builders
 
 ---
 
@@ -237,7 +237,7 @@ python -m redline.poller          # 15-min cadence
 pip install -e ".[dev]"    # ruff + mypy + pytest
 ruff check .               # lint
 mypy src/redline           # type-check
-pytest -q                  # 223 tests
+pytest -q                  # 246 tests
 ```
 
 These three run on every push/PR via GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)), matrixed over Python 3.11 and 3.12.
@@ -262,7 +262,7 @@ Five things that didn't show up in the planning docs but emerged during the buil
 
 ## Cost transparency
 
-| Phase / activity | OpenAI spend |
+| Phase / activity | LLM spend |
 |---|---|
 | Phase 0.5 Stage-2 dry-run on 85 chunks | $0.01 |
 | Phase 1 entry smoke test | $0.001 |
@@ -271,9 +271,13 @@ Five things that didn't show up in the planning docs but emerged during the buil
 | Eval harness: PLTR Karp 2024 | $0.05 |
 | Eval harness: KEY FY2022 10-K diff | ~$0.60 |
 | Eval harness: CVNA FY2022 10-K diff | ~$0.60 |
-| **Total Phase 0.5 + Phase 1 build** | **$1.27 of $4.98** |
+| **OpenAI subtotal** | **$1.27 of $4.98 credits** |
+| 8-K guidance extraction, 12-accession panel (Anthropic `claude-sonnet-4-6`, fallover) | $0.73 |
+| **Total real LLM spend** | **$2.00** |
 
-Remaining: $3.71 in OpenAI credits before fallover to Anthropic.
+OpenAI credits carried the build to $1.27; when the OpenAI quota was exhausted,
+the 8-K guidance extraction ran on the automatic Anthropic fallover ($0.73) — $2.00
+total, under the $3 hard cap.
 
 ---
 

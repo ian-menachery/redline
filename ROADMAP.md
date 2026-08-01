@@ -77,14 +77,14 @@ Goal: ship polish that makes the project defensible in extended interview conver
 Event-driven revaluation from XBRL financials (NOT sentiment, NOT alpha — see `CLAUDE.md` §4). Shipped: XBRL companyfacts ingestion, a range-based DCF engine (bear/base/bull + sensitivity), an immutable before/after revaluation hook, a mandatory FCF-base validation eval, the 8-K guidance extraction hook, and a hosted recruiter dashboard. Covers the 6 non-financials (banks excluded); only VRTX + ULTA are presented as DCF-valued. See `NOTES.md` §12 (final state + limitations), §6/§7, and `CLAUDE.md` §11.
 
 **Done since the initial build:**
-- **8-K earnings-exhibit guidance extraction — DONE.** Feasibility gate passed (guidance is in Ex-99.1, not MD&A); typed extractor ran live on `claude-sonnet-4-6`; extraction-accuracy eval produced a real number (precision 0.875 vs the 0.90 bar — the residual FPs are correctly-classified segment figures against a totals-only gold; see `NOTES.md` §12).
+- **8-K earnings-exhibit guidance extraction — DONE.** Feasibility gate passed (guidance is in Ex-99.1, not MD&A); typed extractor ran live on `claude-sonnet-4-6`. It was then scored on a mechanically-selected, locked **12-accession** panel (tag `guidance-eval-registration-v1`). `EVAL.md` leads with the pipeline-faithful number — **revenue guidance (the only DCF input), trigger-eligible precision/recall 1.000/1.000**; confidence-gated overall 0.818; raw all-metrics 0.714 (the honest generalization gap a held-out panel exposes). See `EVAL.md` / `NOTES.md` §12.
 - **Assumption constants verified — DONE.** WACC / terminal growth / manual reference prices transcribed from sourced values; all six `is_placeholder: false`.
 - **Hosted dashboard — SHIPPED & PUBLIC.** `dashboard/valuation_app.py` deployed to Streamlit Community Cloud (`redline-valuations.streamlit.app`), read-only against a committed curated snapshot, no key/secret; confirmed public/logged-out (see `NOTES.md` §12).
 
 **Still deferred (each needs its own feasibility gate before building):**
 - **Bank valuation model.** SCHW/KEY need a financials-appropriate model (dividend-discount / residual-income / P-TBV) if they're to be valued at all.
 - **Growth-name valuation.** NET/PLTR/MRNA don't reconcile under FCF-DCF; a multiples-based or reverse-DCF approach would be needed to value rather than merely monitor them.
-- **Guidance precision to 0.90.** Segment-labeled gold or scope=total-only precision measurement (see `NOTES.md` §12 limitation 1).
+- **~~Guidance precision to 0.90~~ — MET.** Measured on `scope=total` (the totals-only gold's scope): revenue guidance is 1.000/1.000 trigger-eligible on the locked 12-accession panel; the earlier 0.875 had mis-scored correctly-classified segment figures. See `EVAL.md` / `NOTES.md` §12.
 
 ## Phase 3 — Stretch (optional, post-recruiting)
 
