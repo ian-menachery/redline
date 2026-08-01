@@ -202,15 +202,15 @@ def _render_model_detail(d: dict) -> None:
     """Render the read-only "how this was modeled" breakdown from baked data."""
     a = d["assumptions"]
     horizon = a["horizon"]
-    st.markdown(
+    st.markdown(data.md_escape(
         f"**Assumptions** — WACC {a['wacc']:.1%} · terminal growth "
         f"{a['terminal_growth']:.1%} · {horizon}-year explicit horizon · tax "
         f"{a['tax_rate']:.0%}. Base year FY{a['fiscal_year']}: revenue "
         f"{_fmt_money(a['base_revenue'])}, net debt {_fmt_money(a['net_debt'])}, "
         f"{a['shares_diluted']:,.0f} diluted shares."
-    )
+    ))
     if d.get("low_confidence_note"):
-        st.caption(f"Note: {d['low_confidence_note']}")
+        st.caption(data.md_escape(f"Note: {d['low_confidence_note']}"))
 
     st.markdown("**Base-case free-cash-flow projection**")
     st.altair_chart(ui.fcf_projection(d["projection"]), use_container_width=True)
@@ -229,14 +229,14 @@ def _render_model_detail(d: dict) -> None:
     )
 
     br = d["base_result"]
-    st.markdown(
+    st.markdown(data.md_escape(
         f"PV of explicit FCFs {_fmt_money(br['pv_explicit'])} + PV of terminal "
         f"value {_fmt_money(br['pv_terminal'])} = enterprise value "
         f"{_fmt_money(br['enterprise_value'])} − net debt = equity "
         f"{_fmt_money(br['equity_value'])} ÷ shares = **${br['per_share']:,.0f}** "
         f"base per share. Terminal value is {br['terminal_value_fraction']:.0%} "
         f"of enterprise value."
-    )
+    ))
     st.altair_chart(ui.ev_split(br), use_container_width=True)
 
     sens = d.get("sensitivity") or {}
@@ -284,9 +284,9 @@ def _valuation_card(v: dict, ticker: str) -> None:
             disp, stale = _fmt_asof(asof)
             suffix = f"reference price ${ref:,.2f} (as of {disp})"
             if stale:
-                st.caption(f":grey[{suffix} — reference may be stale]")
+                st.caption(data.md_escape(f":grey[{suffix} — reference may be stale]"))
             else:
-                st.caption(f"Estimated value range vs. {suffix}.")
+                st.caption(data.md_escape(f"Estimated value range vs. {suffix}."))
         st.caption("A modeled range from the company's own reported cash flows — "
                    "not a recommendation.")
         if v.get("bear") is not None:
@@ -429,7 +429,7 @@ def page_disclosure() -> None:
         disp, _stale = data._humanize_date(f.get("flagged_at"))
         st.markdown(
             f"**{f['ticker']} · {data._humanize_filing_type(f['filing_type'])}** — "
-            f"{headline}  \n_{sev} · {disp} · "
+            f"{data.md_escape(headline)}  \n_{sev} · {disp} · "
             f"{data._humanize_flag_reason(f['flag_reason'])}_"
         )
     st.caption(f"Full interactive monitor: [{_EDGAR_APP_URL}]({_EDGAR_APP_URL}).")

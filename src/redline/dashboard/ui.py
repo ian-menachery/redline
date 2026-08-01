@@ -138,7 +138,7 @@ def ev_split(base_result: dict) -> alt.Chart:
         order="o:Q",
         tooltip=["part:N", alt.Tooltip("value:Q", title="PV ($)", format="$,.0f")],
     )
-    return _themed(chart.properties(title="Enterprise value: explicit vs. terminal"), height=90)
+    return _themed(chart.properties(title="Enterprise value: explicit vs. terminal"), height=130)
 
 
 def sensitivity_tornado(sensitivity: dict, *, base_per_share: float) -> alt.Chart:
@@ -152,8 +152,12 @@ def sensitivity_tornado(sensitivity: dict, *, base_per_share: float) -> alt.Char
             rows.append({"driver": labels.get(key, key), "low": min(vals), "high": max(vals)})
     if not rows:
         rows = [{"driver": "(no sensitivity data)", "low": base_per_share, "high": base_per_share}]
-    bars = alt.Chart(alt.Data(values=rows)).mark_bar(size=20, cornerRadius=4, color=NAVY).encode(
-        y=alt.Y("driver:N", title=None),
+    # Band-relative bars (no fixed pixel size, which overflows a compressed band
+    # in a narrow column and makes the rows overlap) + generous band padding, and
+    # a height that scales with the driver count so rows are always separated.
+    bars = alt.Chart(alt.Data(values=rows)).mark_bar(cornerRadius=4, color=NAVY).encode(
+        y=alt.Y("driver:N", title=None,
+                scale=alt.Scale(paddingInner=0.45, paddingOuter=0.3)),
         x=alt.X("low:Q", title="Value per share ($)", scale=alt.Scale(zero=False)),
         x2="high:Q",
         tooltip=["driver:N", alt.Tooltip("low:Q", format="$,.0f"),
@@ -162,7 +166,7 @@ def sensitivity_tornado(sensitivity: dict, *, base_per_share: float) -> alt.Char
     rule = alt.Chart(alt.Data(values=[{"base": base_per_share}])).mark_rule(
         color=NEUTRAL, strokeDash=[4, 3]).encode(x="base:Q")
     return _themed(alt.layer(bars, rule).properties(title="Sensitivity (per-share value)"),
-                   height=140)
+                   height=72 + 54 * len(rows))
 
 
 # --- disclosure / overview charts ------------------------------------------

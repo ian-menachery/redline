@@ -46,6 +46,17 @@ _SECTION_LABELS = {
 
 # --- formatters (pure) -----------------------------------------------------
 
+def md_escape(text: str) -> str:
+    """Escape ``$`` so Streamlit markdown does not parse dollar amounts as LaTeX.
+
+    Streamlit renders text between paired ``$`` as KaTeX math, so a string like
+    "revenue $12.9B to $14.1B" garbles into stacked math. ``\\$`` renders as a
+    literal ``$``; escaping a lone ``$`` is a visual no-op, so this is safe to
+    apply to any markdown/caption sink (never ``st.metric``/``st.text`` — those
+    don't render KaTeX). Apply to money- or LLM-text-bearing markdown only."""
+    return text.replace("$", "\\$")
+
+
 def _humanize_filing_type(t: str | None) -> str:
     return _FILING_LABELS.get(t or "", t or "—")
 

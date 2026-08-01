@@ -42,6 +42,19 @@ def test_sensitivity_tornado_and_empty():
     _ok(ui.sensitivity_tornado({}, base_per_share=483.0))
 
 
+def test_sensitivity_tornado_layout_scales_and_pads():
+    # Regression: at a fixed 140px with a 20px bar the two rows overlapped in a
+    # narrow column. Height must scale with driver count and bars be band-padded.
+    spec = ui.chart_to_spec(ui.sensitivity_tornado(_SENS, base_per_share=483.0))
+    assert spec.get("height", 0) >= 170          # 2 drivers -> 180 (was 140)
+    assert "paddingInner" in str(spec)            # band padding so rows separate
+
+
+def test_ev_split_height_not_cramped():
+    spec = ui.chart_to_spec(ui.ev_split(_BASE_RESULT))
+    assert spec.get("height", 0) >= 120           # was a cramped 90
+
+
 def test_materiality_hist_and_empty():
     _ok(ui.materiality_hist([0.9, 0.6, 0.8, 0.3]))
     _ok(ui.materiality_hist([]))

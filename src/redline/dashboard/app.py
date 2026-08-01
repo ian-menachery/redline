@@ -36,6 +36,7 @@ from redline.dashboard.data import (
     _severity,
     _synthesize_headline,
     _watchlist,
+    md_escape,
 )
 from redline.storage.db import connect
 
@@ -277,7 +278,7 @@ def _render_finding_card(conn: sqlite3.Connection, event: dict) -> None:
         )
 
         # Headline
-        st.markdown(f"#### {headline}")
+        st.markdown(f"#### {md_escape(headline)}")
 
         # Topic chips
         if unique_topics:
@@ -316,7 +317,7 @@ def _render_finding_card(conn: sqlite3.Connection, event: dict) -> None:
                         f'<span style="color:#5d6d7e">{change_label}</span>',
                         unsafe_allow_html=True,
                     )
-                    st.markdown(s.get("summary", ""))
+                    st.markdown(md_escape(s.get("summary", "")))
                     sub_topics = s.get("affected_topics") or []
                     if sub_topics:
                         st.markdown(
@@ -348,7 +349,7 @@ def _render_finding_card(conn: sqlite3.Connection, event: dict) -> None:
                 if drivers:
                     st.markdown("**Specific signals identified:**")
                     for d in drivers:
-                        st.markdown(f"- {d}")
+                        st.markdown(f"- {md_escape(d)}")
 
             # Underlying detail (nested)
             with st.expander("Underlying analysis"):
@@ -367,7 +368,7 @@ def _render_finding_card(conn: sqlite3.Connection, event: dict) -> None:
                         )
                         st.markdown(
                             f"**{_humanize_section(row['section'])}** · {verdict} "
-                            f"— _{decision.get('reason', '')}_"
+                            f"— _{md_escape(decision.get('reason', ''))}_"
                         )
                         cols = st.columns(2)
                         cols[0].markdown("_Previous filing_")
